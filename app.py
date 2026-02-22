@@ -3,12 +3,10 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Rota principal para teste
 @app.route("/")
 def home():
     return "Tec bot rodando no Render ✅", 200
 
-# Webhook para Validação (GET) e Mensagens (POST)
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
@@ -16,10 +14,10 @@ def webhook():
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
 
-        # Verifica se o token é 'meta2030'
+        # Ajustado para o token 'meta2030'
         if mode == "subscribe" and token == "meta2030":
             return challenge, 200
-        return "Token inválido", 403
+        return "Token de verificação inválido", 403
 
     if request.method == "POST":
         data = request.get_json()
