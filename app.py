@@ -16,7 +16,7 @@ def webhook():
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
 
-        # Verifica o token configurado na Meta (meta2030)
+        # Verifica se o token é 'meta2030'
         if mode == "subscribe" and token == "meta2030":
             return challenge, 200
         return "Token inválido", 403
@@ -27,6 +27,5 @@ def webhook():
         return "EVENT_RECEIVED", 200
 
 if __name__ == "__main__":
-    # O Render usa a porta da variável de ambiente
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
