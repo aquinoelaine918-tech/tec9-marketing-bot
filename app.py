@@ -87,11 +87,9 @@ def auth_callback():
 # Status do OAuth (não pode ser fixo false)
 @app.get("/auth/status")
 def auth_status():
-    # Se você já colocou META_ACCESS_TOKEN no Render, isso vira "true"
-    meta_access_token = os.getenv("META_ACCESS_TOKEN", "")
-    authenticated = bool(meta_access_token)
+    return jsonify(ok=True, authenticated=False), 200
 
-    return jsonify(
-        ok=True,
-        authenticated=authenticated
-    ), 200
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
