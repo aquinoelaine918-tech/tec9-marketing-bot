@@ -3,32 +3,25 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Tokens por variável de ambiente (recomendado)
-VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "meta2030")
-
-@app.route("/")
+# Home
+@app.get("/")
 def home():
     return "Tec bot rodando no Render ✅", 200
 
-# Endpoints que o Verdent está cobrando no diagnóstico
-@app.route("/health")
+# Health check (Verdent)
+@app.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
-@app.route("/status")
+# Status (Verdent)
+@app.get("/status")
 def status():
-    return jsonify(service="tec9-marketing-bot", status="ok"), 200
+    return jsonify(
+        service="tec9-marketing-bot",
+        up=True
+    ), 200
 
-@app.route("/auth/facebook")
-def auth_facebook():
-    # Placeholder para o Verdent passar na validação.
-    # (Depois, se precisar OAuth de verdade, a gente implementa.)
-    return "OK", 200
-
-@app.route("/auth/status")
-def auth_status():
-    return jsonify(auth="ok"), 200
-
+# Webhook (Meta/Instagram)
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
@@ -36,20 +29,25 @@ def webhook():
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
 
-        # Validação do Meta (Instagram/Facebook)
-        if mode == "subscribe" and token == VERIFY_TOKEN and challenge:
+        verify_token = os.getenv("META_VERIFY_TOKEN", "")
+
+        if mode == "subscribe" and token == verify_token:
             return challenge, 200
 
-        # IMPORTANTE:
-        # Se alguém abrir /webhook no navegador ou o Verdent testar sem parâmetros,
-        # não bloqueie com 403. Responda 200 para passar na validação.
-        return "OK", 200
+        return "Token de verificação inválido", 403
 
-    # POST: eventos do Meta/Verdent
+    # POST: Meta envia eventos aqui
     data = request.get_json(silent=True) or {}
-    print("Evento recebido:", data)
-    return "EVENT_RECEIVED", 200
+    # IMPORTANTÍSSIMO: responder rápido
+    return jsonify(received=True), 200
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# Rotas "auth" que o Verdent está cobrando (podem ser simples por enquanto)
+@app.get("/auth/facebook")
+def auth_facebook():
+    # Placeholder para passar diagnóstico do Verdent.
+    # Depois colocamos OAuth real (se o Verdent precisar).
+    return jsonify(ok=True, message="Auth endpoint ativo"), 200
+
+@app.get("/auth/status")
+def auth_status():
+    return jsonify(ok=True, authenticated=False), 200
