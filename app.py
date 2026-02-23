@@ -5,56 +5,90 @@ from flask import Flask, request, jsonify, redirect
 
 app = Flask(__name__)
 
-# --- CONFIG ---
-FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "")
-FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "")
-OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "https://tec9-marketing-bot.onrender.com/auth/callback")
+# ---------------- CONFIG ----------------
+# Render ENV (obrigatórios)
+FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "").strip()
+FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "").strip()
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
+# IMPORTANTÍSSIMO:
+# Seu Render tem "FACEBOOK_REDIRECT_URI", mas seu código usava "OAUTH_REDIRECT_URI".
+# Aqui aceitamos os dois, para não quebrar.
+OAUTH_REDIRECT_URI = (
+    os.getenv("OAUTH_REDIRECT_URI", "").strip()
+    or os.getenv("FACEBOOK_REDIRECT_URI", "").strip()
+    or "https://tec9-marketing-bot.onrender.com/auth/callback"
+)
 
-# Armazenamento simples (para funcionar já). Em produção ideal é banco/redis.
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "").strip()
+
+# Scopes configuráveis via env (para não dar "Invalid Scopes")
+# Default seguro (quase sempre funciona):
+DEFAULT_SCOPE = "pages_show_list,pages_manage_metadata"
+OAUTH_SCOPE = os.getenv("OAUTH_SCOPE", DEFAULT_SCOPE).strip()
+
+# Armazenamento simples (para testes)
 AUTH_STORE = {
     "authenticated": False,
-    "access_token": None
+    "access_token": None,
+    "token_data": None,
 }
 
-
+# ---------------- HEALTH ----------------
 @app.get("/")
 def home():
     return "Tec bot rodando no Render ✅", 200
 
-
 @app.get("/health")
 def health():
     return jsonify(status="ok"), 200
-
 
 @app.get("/status")
 def status():
     return jsonify(service="tec9-marketing-bot", up=True), 200
 
 
-# ---------------- OAUTH (REAL) ----------------
+# ---------------- DIAGNÓSTICO ----------------
+@app.get("/auth/debug")
+def auth_debug():
+    """
+    Mostra quais variáveis estão chegando (sem revelar segredos).
+    Use isso para conferir se o Render realmente aplicou as env vars.
+    """
+    return jsonify(
+        ok=True,
+        env={
+            "FACEBOOK_APP_ID_present": bool(FACEBOOK_APP_ID),
+            "FACEBOOK_APP_SECRET_present": bool(FACEBOOK_APP_SECRET),
+            "OAUTH_REDIRECT_URI": OAUTH_REDIRECT_URI,
+            "VERIFY_TOKEN_present": bool(VERIFY_TOKEN),
+            "OAUTH_SCOPE": OAUTH_SCOPE,
+        }
+    ), 200
+
+
+# ---------------- OAUTH ----------------
 @app.get("/auth/facebook")
 def auth_facebook():
-    # Se faltar config, já mostra claro
-    if not FACEBOOK_APP_ID or not FACEBOOK_APP_SECRET or not OAUTH_REDIRECT_URI:
+    # Validação de ENV
+    missing = []
+    if not FACEBOOK_APP_ID:
+        missing.append("FACEBOOK_APP_ID")
+    if not FACEBOOK_APP_SECRET:
+        missing.append("FACEBOOK_APP_SECRET")
+    if not OAUTH_REDIRECT_URI:
+        missing.append("OAUTH_REDIRECT_URI (ou FACEBOOK_REDIRECT_URI)")
+
+    if missing:
         return jsonify(
             ok=False,
             error="Missing OAuth env vars",
-            FACEBOOK_APP_ID=bool(FACEBOOK_APP_ID),
-            FACEBOOK_APP_SECRET=bool(FACEBOOK_APP_SECRET),
-            OAUTH_REDIRECT_URI=OAUTH_REDIRECT_URI
+            missing=missing,
+            hint="Configure as ENV no Render e salve com 'Save, rebuild and deploy'."
         ), 500
 
-    # Escopos: ajuste conforme o que seu app precisa
-    scope = ",".join([
-        "pages_show_list",
-        "pages_manage_metadata",
-        "pages_messaging",
-        "instagram_basic",
-        "instagram_manage_messages"
-    ])
+    # Facebook aceita scope com vírgula, mas vamos normalizar e evitar espaços ruins
+    # Ex: "pages_show_list,pages_manage_metadata"
+    scope = ",".join([s.strip() for s in OAUTH_SCOPE.split(",") if s.strip()])
 
     params = {
         "client_id": FACEBOOK_APP_ID,
@@ -63,21 +97,23 @@ def auth_facebook():
         "scope": scope,
         "state": "tec9"
     }
+
     url = "https://www.facebook.com/v19.0/dialog/oauth?" + urllib.parse.urlencode(params)
     return redirect(url)
 
 
 @app.get("/auth/callback")
 def auth_callback():
-    error = request.args.get("error")
-    if error:
-        return jsonify(ok=False, error=error, details=request.args.to_dict()), 400
+    # Se vier erro do Facebook
+    fb_error = request.args.get("error")
+    if fb_error:
+        return jsonify(ok=False, error=fb_error, details=request.args.to_dict()), 400
 
     code = request.args.get("code")
     if not code:
-        return jsonify(ok=False, error="Missing code", details=request.args.to_dict()), 400
+        return jsonify(ok=False, error="Callback sem code", details=request.args.to_dict()), 400
 
-    # Trocar code por access_token
+    # Troca code por access_token
     token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
     token_params = {
         "client_id": FACEBOOK_APP_ID,
@@ -86,7 +122,11 @@ def auth_callback():
         "code": code
     }
 
-    r = requests.get(token_url, params=token_params, timeout=30)
+    try:
+        r = requests.get(token_url, params=token_params, timeout=30)
+    except requests.RequestException as e:
+        return jsonify(ok=False, error="Token exchange request failed", details=str(e)), 500
+
     if r.status_code != 200:
         return jsonify(ok=False, error="Token exchange failed", status=r.status_code, body=r.text), 500
 
@@ -97,13 +137,18 @@ def auth_callback():
 
     AUTH_STORE["authenticated"] = True
     AUTH_STORE["access_token"] = access_token
+    AUTH_STORE["token_data"] = data
 
-    return jsonify(ok=True, authenticated=True)
+    return jsonify(ok=True, authenticated=True, token_received=True), 200
 
 
 @app.get("/auth/status")
 def auth_status():
-    return jsonify(authenticated=AUTH_STORE["authenticated"], ok=True), 200
+    return jsonify(
+        ok=True,
+        authenticated=AUTH_STORE["authenticated"],
+        has_token=bool(AUTH_STORE["access_token"])
+    ), 200
 
 
 # ---------------- WEBHOOK ----------------
