@@ -1,5 +1,6 @@
 import os
 import urllib.parse
+import requests
 from flask import Flask, request, jsonify, redirect
 
 app = Flask(__name__)
@@ -9,17 +10,17 @@ app = Flask(__name__)
 def home():
     return "Tec bot rodando no Render ✅", 200
 
-# Health check (Verdent)
+# Health
 @app.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
-# Status (Verdent)
+# Status
 @app.get("/status")
 def status():
     return jsonify(service="tec9-marketing-bot", up=True), 200
 
-# Webhook (Meta/Instagram)
+# Webhook
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
@@ -32,25 +33,23 @@ def webhook():
         if mode == "subscribe" and token == verify_token:
             return challenge, 200
 
-        return "Token de verificação inválido", 403
+        return "Token inválido", 403
 
-    _data = request.get_json(silent=True) or {}
     return jsonify(received=True), 200
 
-# OAuth Facebook (login básico pra validar)
+
+# LOGIN FACEBOOK
 @app.get("/auth/facebook")
 def auth_facebook():
+
     start = request.args.get("start")
     if start != "true":
         return jsonify(ok=True, message="Auth endpoint ativo"), 200
 
     app_id = os.getenv("FACEBOOK_APP_ID")
-    if not app_id:
-        return jsonify(ok=False, error="Faltando variável FACEBOOK_APP_ID no Render"), 500
 
     redirect_uri = "https://tec9-marketing-bot.onrender.com/auth/callback"
 
-    # ✅ COMEÇAR SIMPLES (para não dar erro de permissão)
     scope = "public_profile,email"
 
     params = {
@@ -61,25 +60,46 @@ def auth_facebook():
     }
 
     url = "https://www.facebook.com/v19.0/dialog/oauth?" + urllib.parse.urlencode(params)
+
     return redirect(url)
 
-# Callback
+
+# CALLBACK + TROCA POR TOKEN
 @app.get("/auth/callback")
 def auth_callback():
-    code = request.args.get("code")
-    error = request.args.get("error")
 
-    if error:
-        return jsonify(ok=False, error=error, details=request.args.to_dict()), 400
+    code = request.args.get("code")
 
     if not code:
-        return jsonify(ok=False, error="Callback sem code", details=request.args.to_dict()), 400
+        return jsonify(ok=False, error="Callback sem code"), 400
 
-    return jsonify(ok=True, message="Callback recebido com sucesso", has_code=True, code_preview=code[:10]), 200
+    app_id = os.getenv("FACEBOOK_APP_ID")
+    app_secret = os.getenv("FACEBOOK_APP_SECRET")
+
+    redirect_uri = "https://tec9-marketing-bot.onrender.com/auth/callback"
+
+    token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+
+    params = {
+        "client_id": app_id,
+        "client_secret": app_secret,
+        "redirect_uri": redirect_uri,
+        "code": code,
+    }
+
+    response = requests.get(token_url, params=params)
+    data = response.json()
+
+    return jsonify(
+        ok=True,
+        message="ACCESS TOKEN GERADO",
+        facebook_response=data
+    ), 200
+
 
 @app.get("/auth/status")
 def auth_status():
-    return jsonify(ok=True, authenticated=False), 200
+    return jsonify(ok=True), 200
 
 
 if __name__ == "__main__":
