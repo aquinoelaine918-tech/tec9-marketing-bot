@@ -1,23 +1,15 @@
-# ================= CONFIG =================
+@app.route("/webhook", methods=["GET", "POST"])
+def webhook():
+    if request.method == "GET":
+        # O Facebook envia estes parâmetros para validar seu servidor
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-# Render ENV (obrigatórios)
-FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "").strip()
-FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "").strip()
-
-# IMPORTANTE:
-# Aceita tanto OAUTH_REDIRECT_URI quanto FACEBOOK_REDIRECT_URI
-OAUTH_REDIRECT_URI = (
-    os.getenv("OAUTH_REDIRECT_URI", "").strip()
-    or os.getenv("FACEBOOK_REDIRECT_URI", "").strip()
-    or "https://tec9-marketing-bot.onrender.com/auth/callback"
-)
-
-# 🔥 CORREÇÃO DO VERIFY TOKEN (ACEITA OS DOIS NOMES)
-VERIFY_TOKEN = (
-    os.getenv("VERIFY_TOKEN", "").strip()
-    or os.getenv("META_VERIFY_TOKEN", "").strip()
-).strip()
-
-# Scopes configuráveis via env
-DEFAULT_SCOPE = "pages_show_list,pages_manage_metadata"
-OAUTH_SCOPE = os.getenv("OAUTH_SCOPE", DEFAULT_SCOPE).strip()
+        # O 'token' deve ser exatamente o que você digitou no painel da Meta
+        if mode == "subscribe" and token == "tec9_webhook_2026":
+            return challenge, 200 # DEVE retornar apenas o valor do challenge
+        return "Token inválido", 403
+    
+    # Aqui entra sua lógica para processar mensagens (POST)
+    return "OK", 200
