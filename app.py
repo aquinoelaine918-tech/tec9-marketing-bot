@@ -1,23 +1,22 @@
-import os
-from flask import request
+from flask import Flask, request
 
-VERIFY_TOKEN = (os.getenv("META_VERIFY_TOKEN") or os.getenv("VERIFY_TOKEN") or "").strip()
+app = Flask(__name__)   # 👈 TEM QUE VIR ANTES DE TUDO
+
+VERIFY_TOKEN = "tec9_verify_2026"
+
+
+@app.get("/")
+def home():
+    return "Tec bot rodando no Render ✅", 200
+
 
 @app.get("/webhook")
 def verify():
-    try:
-        mode = request.args.get("hub.mode", "")
-        token = request.args.get("hub.verify_token", "")
-        challenge = request.args.get("hub.challenge", "")
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
 
-        print("DEBUG TOKEN RECEBIDO:", token)
-        print("DEBUG TOKEN ESPERADO:", VERIFY_TOKEN)
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
 
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
-
-        return "Token de verificação inválido", 403
-
-    except Exception as e:
-        print("ERRO NO WEBHOOK:", e)
-        return "Erro interno", 500
+    return "Token de verificação inválido", 403
