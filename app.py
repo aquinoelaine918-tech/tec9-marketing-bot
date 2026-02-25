@@ -1,6 +1,5 @@
 from flask import Flask, request
-
-app = Flask(__name__)   # 👈 TEM QUE VIR ANTES DE TUDO
+app = Flask(__name__)
 
 VERIFY_TOKEN = "tec9_verify_2026"
 
