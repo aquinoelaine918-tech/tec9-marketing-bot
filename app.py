@@ -4,94 +4,79 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "tec9_verify_2026")
-ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
-@app.get("/")
+# =========================
+# HOME
+# =========================
+@app.route("/", methods=["GET"])
 def home():
-    return "TEC9 bot rodando no Render ✅", 200
-
-@app.get("/health")
-def health():
-    return jsonify(status="ok"), 200
-
+    return "TEC9 BOT ONLINE ✅", 200
 
 # =========================
-# 1) Verificação do Webhook
+# WEBHOOK VERIFICATION
 # =========================
-@app.get("/webhook")
+@app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado com sucesso")
+        print("✅ Webhook verificado")
         return challenge, 200
-
-    print("❌ Webhook verify falhou:", {"mode": mode, "token_recebido": token})
-    return "Token de verificação inválido", 403
-
+    return "Erro de verificação", 403
 
 # =========================
-# 2) Receber Eventos IG
+# RECEBER MENSAGENS
 # =========================
-@app.post("/webhook")
-def receive():
-    data = request.get_json(silent=True) or {}
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json()
     print("📩 EVENTO RECEBIDO:", data)
 
     try:
-        # Estrutura padrão: entry -> messaging[]
-        for entry in data.get("entry", []):
-            for msg in entry.get("messaging", []):
+        for entry in data["entry"]:
+            for msg in entry["messaging"]:
+                if "message" in msg:
 
-                # Ignora eventos que não são mensagem de texto (read/delivery etc.)
-                message_obj = msg.get("message")
-                if not message_obj:
-                    continue
+                    sender_id = msg["sender"]["id"]
+                    text = msg["message"].get("text")
 
-                text = message_obj.get("text")
-                if not text:
-                    continue
+                    print("💬 Mensagem recebida:", text)
 
-                sender_id = msg.get("sender", {}).get("id")
-                if not sender_id:
-                    continue
-
-                print("✅ Mensagem recebida:", text, "| sender_id:", sender_id)
-
-                # Responder
-                send_reply(sender_id)
+                    enviar_resposta(sender_id)
 
     except Exception as e:
-        print("🔥 ERRO no receive():", str(e))
+        print("❌ ERRO:", e)
 
     return "ok", 200
 
 
 # =========================
-# 3) Enviar Resposta
+# ENVIAR RESPOSTA
 # =========================
-def send_reply(user_id: str):
-    if not ACCESS_TOKEN:
-        print("❌ META_ACCESS_TOKEN NÃO definido no Render (Environment).")
-        return
+def enviar_resposta(sender_id):
 
-    url = "https://graph.facebook.com/v19.0/me/messages"
+    url = f"https://graph.facebook.com/v19.0/me/messages?access_token={META_ACCESS_TOKEN}"
 
     payload = {
-        "recipient": {"id": user_id},
-        "message": {"text": "Olá 👋 Seja bem-vindo(a) à TEC9 Informática! Como posso ajudar você hoje?"}
+        "recipient": {"id": sender_id},
+        "message": {"text": "Olá 👋 Sou o assistente TEC9. Recebi sua mensagem!"}
     }
 
     headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    try:
-        r = requests.post(url, json=payload, headers=headers, timeout=20)
-        print("📤 RESPOSTA ENVIADA:", r.status_code, r.text)
-    except Exception as e:
-        print("🔥 ERRO ao enviar resposta:", str(e))
+    r = requests.post(url, json=payload, headers=headers)
+
+    print("📤 RESPOSTA ENVIADA:", r.status_code, r.text)
+
+
+# =========================
+# RUN
+# =========================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
