@@ -9,7 +9,7 @@ app = Flask(__name__)
 # =========================
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
-IG_USER_ID = os.environ.get("IG_USER_ID")  # ID do Instagram (1784....)
+IG_USER_ID = os.environ.get("IG_USER_ID")  # ID numérico da conta IG Business
 
 # =========================
 # TESTE ONLINE
@@ -18,14 +18,12 @@ IG_USER_ID = os.environ.get("IG_USER_ID")  # ID do Instagram (1784....)
 def home():
     return "TEC9 BOT ONLINE ✅", 200
 
-
 @app.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
-
 # =========================
-# VERIFICAÇÃO META
+# VERIFICAÇÃO META (WEBHOOK)
 # =========================
 @app.get("/webhook")
 def verify_webhook():
@@ -34,12 +32,11 @@ def verify_webhook():
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado")
+        print("✅ Webhook verificado com sucesso!")
         return challenge, 200
 
-    print("❌ Token inválido")
+    print("❌ Falha na verificação: Token inválido")
     return "erro", 403
-
 
 # =========================
 # RECEBE EVENTOS DO INSTAGRAM
@@ -47,8 +44,7 @@ def verify_webhook():
 @app.post("/webhook")
 def receive_webhook():
     data = request.get_json()
-    print("📩 EVENTO RECEBIDO:", data)
-
+    
     if data.get("object") != "instagram":
         return "ok", 200
 
@@ -57,32 +53,34 @@ def receive_webhook():
             for messaging in entry.get("messaging", []):
                 sender_id = messaging.get("sender", {}).get("id")
                 message = messaging.get("message", {})
+                
+                # 🛑 IMPORTANTE: Ignora mensagens enviadas pelo próprio bot (echo)
+                if message.get("is_echo"):
+                    return "ok", 200
+
                 text = message.get("text")
 
                 if sender_id and text:
-                    print(f"💬 Mensagem: {text}")
+                    print(f"📩 MENSAGEM RECEBIDA de {sender_id}: {text}")
+                    
+                    # Lógica de Resposta
                     reply = "Olá 👋 Seja bem-vindo(a) à TEC9 Informática! Como posso ajudar você hoje?"
                     send_message(sender_id, reply)
 
     except Exception as e:
-        print("❌ ERRO PROCESSANDO:", str(e))
+        print("❌ ERRO AO PROCESSAR WEBHOOK:", str(e))
 
     return "ok", 200
 
-
 # =========================
-# ENVIO DE MENSAGEM INSTAGRAM
+# ENVIO DE MENSAGEM (API GRAPH)
 # =========================
 def send_message(recipient_id, text):
-
-    if not META_ACCESS_TOKEN:
-        print("❌ META_ACCESS_TOKEN não existe")
+    if not META_ACCESS_TOKEN or not IG_USER_ID:
+        print("❌ ERRO: META_ACCESS_TOKEN ou IG_USER_ID não configurados no Render.")
         return
 
-    if not IG_USER_ID:
-        print("❌ IG_USER_ID não existe")
-        return
-
+    # Usando v19.0 como no seu código original
     url = f"https://graph.facebook.com/v19.0/{IG_USER_ID}/messages"
 
     headers = {
@@ -97,6 +95,17 @@ def send_message(recipient_id, text):
 
     try:
         response = requests.post(url, headers=headers, json=payload)
-        print("📤 RESPOSTA ENVIADA:", response.status_code, response.text)
+        res_data = response.json()
+        
+        if response.status_code == 200:
+            print(f"📤 RESPOSTA ENVIADA com sucesso para {recipient_id}")
+        else:
+            print(f"❌ ERRO NA API META: {res_data}")
+            
     except Exception as e:
-        print("❌ ERRO ENVIANDO:", str(e))
+        print("❌ ERRO DE CONEXÃO AO ENVIAR:", str(e))
+
+if __name__ == "__main__":
+    # O Render define a porta automaticamente na variável PORT
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
