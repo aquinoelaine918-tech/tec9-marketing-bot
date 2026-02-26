@@ -5,25 +5,27 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # =========================
-# VARIÁVEIS DE AMBIENTE
+# VARIÁVEIS DO RENDER
 # =========================
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "tec9_verify_2026")
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")  # Token gerado no Meta (Instagram API Setup)
-IG_USER_ID = os.environ.get("IG_USER_ID")  # ID numérico do Instagram (ex: 1784....)
+VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
+META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
+IG_USER_ID = os.environ.get("IG_USER_ID")  # ID do Instagram (1784....)
 
 # =========================
-# ROTAS DE TESTE
+# TESTE ONLINE
 # =========================
 @app.get("/")
 def home():
-    return "Tec bot rodando no Render ✅", 200
+    return "TEC9 BOT ONLINE ✅", 200
+
 
 @app.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
+
 # =========================
-# WEBHOOK - VERIFICAÇÃO META
+# VERIFICAÇÃO META
 # =========================
 @app.get("/webhook")
 def verify_webhook():
@@ -32,69 +34,69 @@ def verify_webhook():
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
+        print("✅ Webhook verificado")
         return challenge, 200
 
-    return "Token de verificação inválido", 403
+    print("❌ Token inválido")
+    return "erro", 403
+
 
 # =========================
-# WEBHOOK - RECEBE EVENTOS
+# RECEBE EVENTOS DO INSTAGRAM
 # =========================
 @app.post("/webhook")
-def webhook_receive():
-    data = request.get_json(silent=True) or {}
-    print("EVENTO RECEBIDO:", data)
+def receive_webhook():
+    data = request.get_json()
+    print("📩 EVENTO RECEBIDO:", data)
 
-    # Eventos do Instagram vêm assim: object='instagram' e entry[]
     if data.get("object") != "instagram":
-        return "ignored", 200
+        return "ok", 200
 
     try:
         for entry in data.get("entry", []):
-            # Para IG Messaging API, os eventos costumam vir em entry.messaging[]
-            for msg in entry.get("messaging", []):
-                message = msg.get("message", {})
-                sender = msg.get("sender", {})
-                sender_id = sender.get("id")
+            for messaging in entry.get("messaging", []):
+                sender_id = messaging.get("sender", {}).get("id")
+                message = messaging.get("message", {})
+                text = message.get("text")
 
-                text = message.get("text", "")
-                print(f"💬 Mensagem recebida de {sender_id}: {text}")
-
-                # Só responde quando existe texto e remetente
                 if sender_id and text:
-                    reply_text = "Olá 👋 Seja bem-vindo(a) à TEC9 Informática! Como posso ajudar você hoje?"
-                    send_instagram_message(sender_id, reply_text)
-
-        return "ok", 200
+                    print(f"💬 Mensagem: {text}")
+                    reply = "Olá 👋 Seja bem-vindo(a) à TEC9 Informática! Como posso ajudar você hoje?"
+                    send_message(sender_id, reply)
 
     except Exception as e:
-        print("❌ ERRO NO WEBHOOK:", str(e))
-        return "error", 200
+        print("❌ ERRO PROCESSANDO:", str(e))
+
+    return "ok", 200
 
 
 # =========================
-# ENVIA MENSAGEM PARA INSTAGRAM
+# ENVIO DE MENSAGEM INSTAGRAM
 # =========================
-def send_instagram_message(recipient_id: str, text: str):
+def send_message(recipient_id, text):
+
     if not META_ACCESS_TOKEN:
-        print("❌ META_ACCESS_TOKEN não definido no Render")
+        print("❌ META_ACCESS_TOKEN não existe")
         return
 
     if not IG_USER_ID:
-        print("❌ IG_USER_ID não definido no Render")
-        print("➡️ Crie no Render: IG_USER_ID = (ID numérico do Instagram na tela do Meta)")
+        print("❌ IG_USER_ID não existe")
         return
 
     url = f"https://graph.facebook.com/v19.0/{IG_USER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
     payload = {
         "recipient": {"id": recipient_id},
         "message": {"text": text}
     }
 
-    params = {"access_token": META_ACCESS_TOKEN}
-
     try:
-        resp = requests.post(url, json=payload, params=params, timeout=20)
-        print("📤 RESPOSTA ENVIADA:", resp.status_code, resp.text)
+        response = requests.post(url, headers=headers, json=payload)
+        print("📤 RESPOSTA ENVIADA:", response.status_code, response.text)
     except Exception as e:
-        print("❌ ERRO AO ENVIAR:", str(e))
+        print("❌ ERRO ENVIANDO:", str(e))
