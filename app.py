@@ -21,3 +21,8 @@ def webhook():
 
     if request.method == "POST":
         return "ok", 200
+import os
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
