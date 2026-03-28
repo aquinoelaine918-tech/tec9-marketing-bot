@@ -4,84 +4,69 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# =========================
-# VARIÁVEIS DO RENDER
-# =========================
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
-IG_USER_ID = os.environ.get("IG_USER_ID")  # ID numérico da conta IG Business
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 
-# =========================
-# TESTE ONLINE
-# =========================
-@app.get("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "TEC9 BOT ONLINE ✅", 200
+    return "BOT TEC9 ONLINE 🚀", 200
 
-@app.get("/health")
-def health():
-    return jsonify(status="ok"), 200
-
-# =========================
-# VERIFICAÇÃO META (WEBHOOK)
-# =========================
-@app.get("/webhook")
+@app.route("/webhook", methods=["GET"])
 def verify_webhook():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado com sucesso!")
         return challenge, 200
+    return "Erro verificação", 403
 
-    print("❌ Falha na verificação: Token inválido")
-    return "erro", 403
-
-# =========================
-# RECEBE EVENTOS DO INSTAGRAM
-# =========================
-@app.post("/webhook")
-def receive_webhook():
+@app.route("/webhook", methods=["POST"])
+def receive_message():
     data = request.get_json()
-    
-    if data.get("object") != "instagram":
-        return "ok", 200
+    print("Mensagem recebida:", data)
 
     try:
-        for entry in data.get("entry", []):
-            for messaging in entry.get("messaging", []):
-                sender_id = messaging.get("sender", {}).get("id")
-                message = messaging.get("message", {})
-                
-                # 🛑 IMPORTANTE: Ignora mensagens enviadas pelo próprio bot (echo)
-                if message.get("is_echo"):
-                    return "ok", 200
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
 
-                text = message.get("text")
+        if "messages" in value:
+            message = value["messages"][0]
+            from_number = message["from"]
 
-                if sender_id and text:
-                    print(f"📩 MENSAGEM RECEBIDA de {sender_id}: {text}")
-                    
-                    # Lógica de Resposta
-                    reply = "Olá 👋 Seja bem-vindo(a) à TEC9 Informática! Como posso ajudar você hoje?"
-                    send_message(sender_id, reply)
+            texto = ""
+            if message["type"] == "text":
+                texto = message["text"]["body"]
+
+            resposta = gerar_resposta(texto)
+            enviar_mensagem(from_number, resposta)
 
     except Exception as e:
-        print("❌ ERRO AO PROCESSAR WEBHOOK:", str(e))
+        print("Erro:", str(e))
 
-    return "ok", 200
+    return jsonify({"status": "ok"}), 200
 
-# =========================
-# ENVIO DE MENSAGEM (API GRAPH)
-# =========================
-def send_message(recipient_id, text):
-    if not META_ACCESS_TOKEN or not IG_USER_ID:
-        print("❌ ERRO: META_ACCESS_TOKEN ou IG_USER_ID não configurados no Render.")
-        return
+def gerar_resposta(texto):
+    texto = (texto or "").lower()
 
-    # Usando v19.0 como no seu código original
-    url = f"https://graph.facebook.com/v19.0/{IG_USER_ID}/messages"
+    if "ssd" in texto:
+        return "Temos SSD disponível 👍 Me informe a capacidade (240GB, 480GB ou 1TB) que te envio o link."
+
+    if "notebook" in texto:
+        return "Temos notebooks profissionais. Me informe seu orçamento que te envio opções com link."
+
+    if "preço" in texto or "valor" in texto:
+        return "Claro 👍 Me informe o produto que você procura que te envio preço e link de compra."
+
+    if "entrega" in texto or "prazo" in texto:
+        return "Me informe seu CEP e o produto para eu verificar o prazo de entrega."
+
+    return "Olá! 👋 Bem-vindo à TEC9 Informática. Me diga o produto que você procura que te envio as melhores opções com link de compra."
+
+def enviar_mensagem(numero, mensagem):
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
@@ -89,23 +74,15 @@ def send_message(recipient_id, text):
     }
 
     payload = {
-        "recipient": {"id": recipient_id},
-        "message": {"text": text}
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {"body": mensagem}
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        res_data = response.json()
-        
-        if response.status_code == 200:
-            print(f"📤 RESPOSTA ENVIADA com sucesso para {recipient_id}")
-        else:
-            print(f"❌ ERRO NA API META: {res_data}")
-            
-    except Exception as e:
-        print("❌ ERRO DE CONEXÃO AO ENVIAR:", str(e))
+    response = requests.post(url, headers=headers, json=payload)
+    print("Resposta:", response.status_code, response.text)
 
 if __name__ == "__main__":
-    # O Render define a porta automaticamente na variável PORT
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
