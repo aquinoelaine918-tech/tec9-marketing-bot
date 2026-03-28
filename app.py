@@ -21,3 +21,8 @@ def webhook():
 
     if request.method == "POST":
         return "ok", 200
+
+
+# 🔥 ESSA PARTE É CRÍTICA
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
