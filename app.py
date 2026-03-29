@@ -4,50 +4,51 @@ import os
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("EAAM78ivqOXwBRJErSik3W3ZAm3U8vgX398zC8DfggBmBZBvy4Fjw9w3HZADfAlXaBiQDRaNhhvZCEPxzxPdAHTXBtQFZBt3bHbm107aUVmpyJuiCQJrxxl1Ybxj5wKOTcZAzN9Lk6mXat3YoXIzoixwX0QlPzt8daD3ChVBNP4taVVC01nZA5LLyG1owadfkuQKFSSE1kP3RZBZC8VZCs21SMu31iPCl64YSsw72tQY9J2RZBQFqOE9bZCNFSTtrwHGmBt8V6tXOG9AYLuntKsgU1ZAb9ZBkyV")
+# CONFIGURAÇÕES FIXAS (Para não dar erro de verificação)
+VERIFY_TOKEN = "tec9token123" 
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("1073214362539680")
-
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Bot online", 200
-
+    return "Bot TEC9 Online!", 200
 
 @app.route("/webhook", methods=["GET"])
 def verify():
+    # O Facebook envia estes parâmetros para validar seu bot
+    mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    print("TOKEN RECEBIDO:", token)
-    print("VERIFY_TOKEN APP:", VERIFY_TOKEN)
-
-    if token == VERIFY_TOKEN:
+    # Verifica se o token enviado pelo Facebook é igual ao que definimos acima
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        print("WEBHOOK_VERIFICADO")
         return challenge, 200
+    
+    print("ERRO DE VERIFICAÇÃO: Token incorreto")
     return "Erro de verificação", 403
-
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-    print("Recebido:", data)
+    print("Mensagem Recebida:", data)
 
     try:
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
-
-        if "messages" in value:
+        if "messages" in data["entry"][0]["changes"][0]["value"]:
+            value = data["entry"][0]["changes"][0]["value"]
             message = value["messages"][0]
             from_number = message["from"]
 
-            texto = "mensagem recebida"
+            # Captura o texto da mensagem
+            texto_usuario = "mensagem recebida"
             if "text" in message:
-                texto = message["text"]["body"]
+                texto_usuario = message["body"]
 
-            resposta = f"Olá! 👋 Recebi sua mensagem: {texto}\n\nSou a TEC9 Informática e vou te ajudar agora."
+            # Monta a resposta automática
+            resposta_texto = f"Olá! 👋 Recebi sua mensagem: {texto_usuario}\n\nSou a TEC9 Informática e vou te ajudar agora."
 
-            url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+            # URL da API do WhatsApp
+            url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
             headers = {
                 "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -58,19 +59,19 @@ def webhook():
                 "messaging_product": "whatsapp",
                 "to": from_number,
                 "type": "text",
-                "text": {"body": resposta}
+                "text": {"body": resposta_texto}
             }
 
-            r = requests.post(url, headers=headers, json=payload)
-            print("META STATUS:", r.status_code)
-            print("META RESPOSTA:", r.text)
+            # Envia a resposta de volta para o usuário
+            envio = requests.post(url, headers=headers, json=payload)
+            print(f"Status do Envio: {envio.status_code}")
 
     except Exception as e:
-        print("Erro no POST /webhook:", str(e))
+        print(f"Erro ao processar mensagem: {str(e)}")
 
-    return "ok", 200
-
+    return "EVENT_RECEIVED", 200
 
 if __name__ == "__main__":
+    # O Railway define a porta automaticamente na variável PORT
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
