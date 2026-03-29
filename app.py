@@ -3,9 +3,16 @@ import requests
 
 app = Flask(__name__)
 
+# 🔐 TOKEN DE VERIFICAÇÃO (igual da Meta)
 VERIFY_TOKEN = "tec9token123"
-ACCESS_TOKEN = "COLE_SEU_TOKEN_DA_META_AQUI"
 
+# 🔑 COLE SEU TOKEN DA META AQUI
+ACCESS_TOKEN = "EAAM78ivqOXwBRIGa0Gg8jajAv4jI2VKbVDYAWTECi02KAUrTD1cL2vE6X0DywI3d9G77tLHgpz7694Xp5OTHuSYZBIIQzglKsd8NFLVmBQa3MbFWVpwnoH3BkE8biAjb9VNhQVmxAjjKcIQELW0VSEZArVqECbi6nFc1de05ZCOYH2RqFWYUJfKzBZBTsSGD34xOigJ97EtVwtK4aO9H2AxhwMYCdIaLbR7kUJBK6cOP0AfFBhrpm7dkGRiPlBkzXbJObBJyhEFZB7h0Dnx5Ri86p"
+
+
+# ===============================
+# 🔹 VERIFICAÇÃO DO WEBHOOK
+# ===============================
 @app.route("/webhook", methods=["GET"])
 def verify():
     token = request.args.get("hub.verify_token")
@@ -15,10 +22,14 @@ def verify():
         return challenge
     return "Erro", 403
 
+
+# ===============================
+# 🔹 RECEBER MENSAGENS
+# ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print(data)
+    print("Recebido:", data)
 
     try:
         entry = data["entry"][0]
@@ -26,13 +37,17 @@ def webhook():
         value = changes["value"]
 
         if "messages" in value:
-            msg = value["messages"][0]
-            from_number = msg["from"]
+            message = value["messages"][0]
+
+            from_number = message["from"]
             phone_number_id = value["metadata"]["phone_number_id"]
 
-            texto = msg["text"]["body"]
+            texto = message["text"]["body"]
 
-            resposta = f"Olá 👋 Recebi: {texto}"
+            print("Mensagem:", texto)
+
+            # 🤖 RESPOSTA AUTOMÁTICA
+            resposta = f"Olá! 👋 Recebi sua mensagem: {texto}\n\nSou a TEC9 Informática e vou te ajudar agora."
 
             url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
 
@@ -54,3 +69,10 @@ def webhook():
         print("Erro:", e)
 
     return "ok", 200
+
+
+# ===============================
+# 🔹 RODAR SERVIDOR
+# ===============================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
