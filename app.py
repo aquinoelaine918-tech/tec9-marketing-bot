@@ -3,16 +3,16 @@ import requests
 
 app = Flask(__name__)
 
-# 🔐 TOKEN DE VERIFICAÇÃO (igual da Meta)
 VERIFY_TOKEN = "tec9token123"
+ACCESS_TOKEN = "esse é o token faz o testo completo incluindo o token EAAM78ivqOXwBRMOHYS3jNxTi8G71eZBafoPsdP9ZAvCqMGJi043Txh0ZAotxSOWjwZAWjO5HtkRqNpI5kNhPdvKZAvWI9OSZC3CBLZAjG6DkgE3n9NeaS4ubC0Dmy4U8PNEiagfNWuVdDFfbEG1nGCWQZALoej1mzmqEhvgQ5mq2D1kzMsZCAaKG2U8P6WKaXZBmBezPsfUe8JhK46MgzXaRveD5zdMkE2JMGqanpm7Qyv4gpEU9BZA2w4u1QXodoALB9ZB5bpZBoSmPg0ZBAQK44F822XTmj7"
+PHONE_NUMBER_ID = "1073214362539680"
 
-# 🔑 COLE SEU TOKEN DA META AQUI
-ACCESS_TOKEN = "EAAM78ivqOXwBRIGa0Gg8jajAv4jI2VKbVDYAWTECi02KAUrTD1cL2vE6X0DywI3d9G77tLHgpz7694Xp5OTHuSYZBIIQzglKsd8NFLVmBQa3MbFWVpwnoH3BkE8biAjb9VNhQVmxAjjKcIQELW0VSEZArVqECbi6nFc1de05ZCOYH2RqFWYUJfKzBZBTsSGD34xOigJ97EtVwtK4aO9H2AxhwMYCdIaLbR7kUJBK6cOP0AfFBhrpm7dkGRiPlBkzXbJObBJyhEFZB7h0Dnx5Ri86p"
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot online", 200
 
 
-# ===============================
-# 🔹 VERIFICAÇÃO DO WEBHOOK
-# ===============================
 @app.route("/webhook", methods=["GET"])
 def verify():
     token = request.args.get("hub.verify_token")
@@ -20,15 +20,12 @@ def verify():
 
     if token == VERIFY_TOKEN:
         return challenge
-    return "Erro", 403
+    return "Erro de verificação", 403
 
 
-# ===============================
-# 🔹 RECEBER MENSAGENS
-# ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
+    data = request.get_json()
     print("Recebido:", data)
 
     try:
@@ -38,18 +35,12 @@ def webhook():
 
         if "messages" in value:
             message = value["messages"][0]
-
             from_number = message["from"]
-            phone_number_id = value["metadata"]["phone_number_id"]
-
             texto = message["text"]["body"]
 
-            print("Mensagem:", texto)
-
-            # 🤖 RESPOSTA AUTOMÁTICA
             resposta = f"Olá! 👋 Recebi sua mensagem: {texto}\n\nSou a TEC9 Informática e vou te ajudar agora."
 
-            url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+            url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
 
             headers = {
                 "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -63,7 +54,8 @@ def webhook():
                 "text": {"body": resposta}
             }
 
-            requests.post(url, headers=headers, json=payload)
+            r = requests.post(url, headers=headers, json=payload)
+            print(r.status_code, r.text)
 
     except Exception as e:
         print("Erro:", e)
@@ -71,8 +63,5 @@ def webhook():
     return "ok", 200
 
 
-# ===============================
-# 🔹 RODAR SERVIDOR
-# ===============================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
