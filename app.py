@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "tec9_token_123")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "tec9token123")
 
 
 @app.route("/", methods=["GET"])
