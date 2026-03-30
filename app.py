@@ -1,43 +1,79 @@
+from flask import Flask, request
+import requests
 import os
-from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "tec9token123")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+
+# =========================
+# VERIFICAÇÃO DO WEBHOOK
+# =========================
+@app.route('/webhook', methods=['GET'])
+def verify():
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if token == VERIFY_TOKEN:
+        return challenge, 200
+    return "Token inválido", 403
 
 
-@app.route("/", methods=["GET"])
-def home():
-    return "Bot online", 200
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    return "OK", 200
-
-
-@app.route("/webhook", methods=["GET", "POST"])
+# =========================
+# RECEBER MENSAGENS
+# =========================
+@app.route('/webhook', methods=['POST'])
 def webhook():
-    # Validação do webhook pela Meta
-    if request.method == "GET":
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
+    data = request.get_json()
 
-        if token == VERIFY_TOKEN:
-            return challenge, 200
-        return "Erro de verificação", 403
+    print("Webhook recebido:", data)
 
-    # Recebimento de eventos/mensagens da Meta
-    if request.method == "POST":
-        data = request.get_json(silent=True)
+    try:
+        entry = data['entry'][0]
+        changes = entry['changes'][0]
+        value = changes['value']
 
-        # Mostra no log do Railway o que chegou
-        print("Webhook recebido:", data, flush=True)
+        if 'messages' in value:
+            message = value['messages'][0]
+            from_number = message['from']
+            text = message['text']['body']
 
-        # Meta só precisa de resposta 200
-        return jsonify({"status": "received"}), 200
+            print("Mensagem recebida:", text)
+
+            responder(from_number, text)
+
+    except Exception as e:
+        print("Erro:", e)
+
+    return "ok", 200
+
+
+# =========================
+# FUNÇÃO DE RESPOSTA
+# =========================
+def responder(numero, texto_recebido):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+
+    mensagem = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": f"Recebi sua mensagem: {texto_recebido}"
+        }
+    }
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, json=mensagem, headers=headers)
+
+    print("Resposta enviada:", response.text)
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=3000)
