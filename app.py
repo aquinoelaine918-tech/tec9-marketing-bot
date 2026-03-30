@@ -4,35 +4,24 @@ import os
 
 app = Flask(__name__)
 
-# 🔥 TOKEN FIXO (IMPORTANTE PARA TESTE)
-VERIFY_TOKEN = "tec9token123"
-
-# 🔐 VEM DO RAILWAY
+# temporário: não vamos comparar token agora
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
 
-# 🔹 ROTA PRINCIPAL
 @app.route("/", methods=["GET"])
 def home():
     return "Bot online", 200
 
 
-# 🔹 TESTE DE VERIFICAÇÃO (MOSTRA O ERRO REAL)
 @app.route("/webhook", methods=["GET"])
 def verify():
-    token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
-
-    return {
-        "token_recebido": repr(token),
-        "verify_token_app": repr(VERIFY_TOKEN),
-        "iguais": token == VERIFY_TOKEN,
-        "challenge": challenge
-    }, 200
+    if challenge:
+        return challenge, 200
+    return "sem challenge", 200
 
 
-# 🔹 RECEBER MENSAGENS
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
@@ -46,7 +35,10 @@ def webhook():
         if "messages" in value:
             message = value["messages"][0]
             from_number = message["from"]
-            texto = message["text"]["body"]
+
+            texto = "mensagem recebida"
+            if "text" in message:
+                texto = message["text"]["body"]
 
             resposta = f"Olá! 👋 Recebi sua mensagem: {texto}\n\nSou a TEC9 Informática e vou te ajudar agora."
 
@@ -65,13 +57,15 @@ def webhook():
             }
 
             r = requests.post(url, headers=headers, json=payload)
-            print(r.status_code, r.text)
+            print("META STATUS:", r.status_code)
+            print("META RESPOSTA:", r.text)
 
     except Exception as e:
-        print("Erro:", e)
+        print("Erro no POST /webhook:", str(e))
 
     return "ok", 200
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
