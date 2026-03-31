@@ -10,9 +10,14 @@ app = Flask(__name__)
 VERIFY_TOKEN = (os.getenv("VERIFY_TOKEN") or "").strip()
 ACCESS_TOKEN = (os.getenv("META_ACCESS_TOKEN") or "").strip()
 PHONE_NUMBER_ID = (os.getenv("PHONE_NUMBER_ID") or "").strip()
-
-# Se quiser colocar o numero do vendedor humano depois:
 WHATSAPP_HUMANO = (os.getenv("WHATSAPP_HUMANO") or "").strip()
+
+# =========================
+# AGENTES TEC9
+# =========================
+AGENTE_SUPORTE = "Lucas"
+AGENTE_VENDAS = "Camila"
+AGENTE_ESPECIALISTA = "Ricardo"
 
 # =========================
 # PALAVRAS-CHAVE
@@ -37,25 +42,27 @@ PALAVRAS_PJ = [
 # =========================
 MENSAGEM_INICIAL = (
     "Olá! Seja bem-vindo(a) à *TEC9 Informática*.\n\n"
-    "Selecione uma das opções abaixo para continuar:\n\n"
-    "1 - *Suporte Técnico*\n"
-    "2 - *Orçamentos e Vendas*\n"
-    "3 - *Falar com Especialista*\n\n"
+    "Você será atendido(a) por nossa equipe especializada:\n\n"
+    f"1 - *{AGENTE_SUPORTE}* | Suporte Técnico\n"
+    f"2 - *{AGENTE_VENDAS}* | Orçamentos e Vendas\n"
+    f"3 - *{AGENTE_ESPECIALISTA}* | Especialista TEC9\n\n"
     "Digite apenas o número da opção desejada."
 )
 
 MENSAGEM_SUPORTE = (
-    "🔧 *Suporte Técnico*\n\n"
-    "Para darmos andamento ao seu atendimento, por favor informe:\n"
+    f"🔧 *{AGENTE_SUPORTE} | Suporte Técnico TEC9*\n\n"
+    "Vou dar sequência ao seu atendimento.\n\n"
+    "Por favor, informe:\n"
     "- marca do equipamento\n"
     "- modelo do equipamento\n"
     "- qual a dúvida\n"
     "- defeito ou situação apresentada\n\n"
-    "Nossa equipe técnica irá analisar sua solicitação."
+    "Nossa equipe técnica irá analisar sua solicitação com atenção."
 )
 
 MENSAGEM_VENDAS = (
-    "💰 *Orçamentos e Vendas*\n\n"
+    f"💰 *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
+    "Vou te ajudar com seu orçamento.\n\n"
     "Por favor, envie:\n\n"
     "- Nome\n"
     "- quantidade desejada\n"
@@ -66,17 +73,19 @@ MENSAGEM_VENDAS = (
 )
 
 MENSAGEM_ESPECIALISTA = (
-    "👤 *Falar com Especialista*\n\n"
-    "Para agilizar seu atendimento, envie por favor:\n"
+    f"👤 *{AGENTE_ESPECIALISTA} | Especialista TEC9*\n\n"
+    "Vou assumir seu atendimento a partir deste momento.\n\n"
+    "Para agilizar a análise, envie por favor:\n"
     "- nome\n"
     "- produto ou necessidade\n"
     "- quantidade\n"
     "- email\n\n"
     "Se for atendimento corporativo, informe também o *CNPJ*.\n\n"
-    "Em seguida, um especialista da *TEC9 Informática* dará continuidade."
+    "Em seguida, daremos continuidade com prioridade."
 )
 
 MENSAGEM_PRECO = (
+    f"💰 *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
     "Perfeito. Para verificarmos *preço e proposta comercial*, envie por favor:\n\n"
     "- Nome\n"
     "- quantidade desejada\n"
@@ -87,6 +96,7 @@ MENSAGEM_PRECO = (
 )
 
 MENSAGEM_PRAZO = (
+    f"🚚 *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
     "Perfeito. Para validarmos *prazo, disponibilidade e entrega*, envie por favor:\n\n"
     "- Nome\n"
     "- quantidade desejada\n"
@@ -96,6 +106,7 @@ MENSAGEM_PRAZO = (
 )
 
 MENSAGEM_ESTOQUE = (
+    f"📦 *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
     "Perfeito. Para confirmarmos *estoque e disponibilidade*, envie por favor:\n\n"
     "- Nome\n"
     "- quantidade desejada\n"
@@ -105,7 +116,8 @@ MENSAGEM_ESTOQUE = (
 )
 
 MENSAGEM_CLIENTE_QUENTE = (
-    "Perfeito. Identificamos sua solicitação como *atendimento comercial prioritário*.\n\n"
+    f"🔥 *{AGENTE_VENDAS} | Atendimento Comercial Prioritário*\n\n"
+    "Identificamos sua solicitação como *atendimento comercial prioritário*.\n\n"
     "Para que nossa equipe avance com mais agilidade, envie por favor:\n\n"
     "- Nome\n"
     "- quantidade desejada\n"
@@ -116,6 +128,7 @@ MENSAGEM_CLIENTE_QUENTE = (
 )
 
 MENSAGEM_PJ = (
+    f"🏢 *{AGENTE_VENDAS} | Atendimento Corporativo TEC9*\n\n"
     "Perfeito. Para atendimento corporativo, envie por favor:\n\n"
     "- Nome do responsável\n"
     "- quantidade desejada\n"
@@ -126,6 +139,7 @@ MENSAGEM_PJ = (
 )
 
 MENSAGEM_LEAD_QUALIFICADO = (
+    f"✅ *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
     "Perfeito. Recebemos suas informações.\n\n"
     "Sua solicitação foi encaminhada para *atendimento comercial especializado*.\n"
     "Nossa equipe dará continuidade com a análise da proposta e retornará com as informações necessárias."
@@ -134,9 +148,9 @@ MENSAGEM_LEAD_QUALIFICADO = (
 MENSAGEM_PADRAO = (
     "Recebemos sua mensagem.\n\n"
     "Para continuar, digite:\n\n"
-    "1 - *Suporte Técnico*\n"
-    "2 - *Orçamentos e Vendas*\n"
-    "3 - *Falar com Especialista*\n\n"
+    f"1 - *{AGENTE_SUPORTE}* | Suporte Técnico\n"
+    f"2 - *{AGENTE_VENDAS}* | Orçamentos e Vendas\n"
+    f"3 - *{AGENTE_ESPECIALISTA}* | Especialista TEC9\n\n"
     "Ou digite *OI* para visualizar novamente o menu."
 )
 
