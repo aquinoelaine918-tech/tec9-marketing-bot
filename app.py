@@ -1,107 +1,95 @@
-import os
+from flask import Flask, request
 import requests
-from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
 
-# =========================
-# VARIÁVEIS (Railway)
-# =========================
+# 🔐 Variáveis do Railway
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
+# =========================
+# 🔹 VERIFICAÇÃO WEBHOOK (META)
+# =========================
+@app.route('/webhook', methods=['GET'])
+def verify():
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if token == VERIFY_TOKEN:
+        return challenge, 200
+    return "Token inválido", 403
+
 
 # =========================
-# TESTE ONLINE
+# 🔹 RECEBER MENSAGENS
 # =========================
-@app.route("/", methods=["GET"])
-def home():
-    return "TEC9 BOT ONLINE 🚀", 200
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    return "OK", 200
-
-
-# =========================
-# WEBHOOK (META)
-# =========================
-@app.route("/webhook", methods=["GET", "POST"])
+@app.route('/webhook', methods=['POST'])
 def webhook():
+    data = request.get_json()
 
-    # ===== VERIFICAÇÃO META =====
-    if request.method == "GET":
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
+    print("📩 WEBHOOK RECEBIDO:", data)
 
-        if token == VERIFY_TOKEN:
-            return challenge, 200
-        else:
-            return "Erro de verificação", 403
+    try:
+        entry = data['entry'][0]
+        changes = entry['changes'][0]
+        value = changes['value']
 
-    # ===== RECEBER EVENTOS =====
-    if request.method == "POST":
-        data = request.get_json(silent=True)
+        if 'messages' in value:
+            message = value['messages'][0]
+            from_number = message['from']
 
-        print("Webhook recebido:", data, flush=True)
+            if 'text' in message:
+                text = message['text']['body']
+                print(f"Mensagem recebida: {text}")
 
-        try:
-            entry = data["entry"][0]
-            changes = entry["changes"][0]
-            value = changes["value"]
+                # 🔥 RESPOSTA AUTOMÁTICA
+                resposta = f"Olá! 👋\n\nRecebi sua mensagem:\n👉 {text}\n\nEm breve um especialista TEC9 vai te atender 🚀"
+                
+                send_message(from_number, resposta)
 
-            if "messages" in value:
-                message = value["messages"][0]
-                numero = message["from"]
+    except Exception as e:
+        print("❌ ERRO:", e)
 
-                tipo = message.get("type")
-
-                if tipo == "text":
-                    texto = message["text"]["body"]
-                else:
-                    texto = f"Tipo recebido: {tipo}"
-
-                print("Mensagem:", texto, flush=True)
-
-                responder(numero, texto)
-
-        except Exception as e:
-            print("Erro:", e, flush=True)
-
-        return jsonify({"status": "ok"}), 200
+    return "ok", 200
 
 
 # =========================
-# ENVIAR RESPOSTA
+# 🔹 ENVIAR MENSAGEM WHATSAPP
 # =========================
-def responder(numero, texto_recebido):
-
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
-
-    mensagem = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {
-            "body": f"Olá! 👋\n\nRecebi sua mensagem:\n👉 {texto_recebido}\n\nComo posso te ajudar hoje?"
-        }
-    }
+def send_message(to, text):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    response = requests.post(url, json=mensagem, headers=headers)
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {
+            "body": text
+        }
+    }
 
-    print("Resposta enviada:", response.text, flush=True)
+    response = requests.post(url, headers=headers, json=payload)
+
+    print("📤 RESPOSTA ENVIADA:", response.status_code, response.text)
 
 
 # =========================
-# RAILWAY PORTA DINÂMICA
+# 🔹 ROTA TESTE (IMPORTANTE)
+# =========================
+@app.route('/')
+def home():
+    return "🚀 TEC9 BOT ONLINE"
+
+
+# =========================
+# 🔹 START (Railway)
 # =========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=3000)
