@@ -47,11 +47,11 @@ MENSAGEM_INICIAL = (
 
 MENSAGEM_SUPORTE = (
     "Você selecionou *Suporte Técnico*.\n\n"
-    "Por favor, descreva o problema do equipamento com o máximo de detalhes possível, informando:\n"
-    "- marca\n"
-    "- modelo\n"
-    "- defeito apresentado\n"
-    "- quando o problema começou\n\n"
+    "Por favor, informe com o máximo de detalhes possível:\n"
+    "- marca do equipamento\n"
+    "- modelo do equipamento\n"
+    "- qual a dúvida\n"
+    "- defeito ou situação apresentada\n\n"
     "Nossa equipe técnica analisará sua solicitação com a máxima atenção."
 )
 
@@ -60,8 +60,8 @@ MENSAGEM_VENDAS = (
     "Para agilizar seu atendimento, envie por favor:\n"
     "- nome do produto ou modelo\n"
     "- quantidade desejada\n"
-    "- cidade de entrega\n"
-    "- nome completo\n"
+    "- CEP de entrega\n"
+    "- nome\n"
     "- email para envio da proposta\n\n"
     "Se a compra for para *empresa*, informe também o *CNPJ*.\n\n"
     "Assim conseguiremos encaminhar uma proposta mais precisa e rápida."
@@ -70,10 +70,10 @@ MENSAGEM_VENDAS = (
 MENSAGEM_ESPECIALISTA = (
     "Você selecionou *Atendimento com Especialista*.\n\n"
     "Para darmos continuidade com mais agilidade, envie por favor:\n"
-    "- seu nome\n"
+    "- nome\n"
     "- produto ou necessidade\n"
     "- quantidade\n"
-    "- cidade de entrega\n"
+    "- CEP de entrega\n"
     "- email\n\n"
     "Se o atendimento for corporativo, informe também o *CNPJ da empresa*.\n\n"
     "Em seguida, um especialista da *TEC9 Informática* dará sequência ao seu atendimento."
@@ -99,8 +99,8 @@ MENSAGEM_CLIENTE_QUENTE = (
     "Para que nossa equipe comercial envie uma proposta com mais agilidade, por favor responda com as seguintes informações:\n\n"
     "- nome do produto ou modelo\n"
     "- quantidade desejada\n"
-    "- cidade de entrega\n"
-    "- nome completo\n"
+    "- CEP de entrega\n"
+    "- nome\n"
     "- email\n\n"
     "Se for compra para *empresa*, informe também:\n"
     "- *CNPJ*\n"
@@ -113,7 +113,7 @@ MENSAGEM_PRECO = (
     "Para cotação mais precisa, envie por favor:\n"
     "- produto ou modelo\n"
     "- quantidade\n"
-    "- cidade de entrega\n"
+    "- CEP de entrega\n"
     "- nome\n"
     "- email\n\n"
     "Se a compra for para empresa, informe também o *CNPJ*."
@@ -124,7 +124,7 @@ MENSAGEM_PRAZO = (
     "Para validarmos corretamente, envie:\n"
     "- produto ou modelo\n"
     "- quantidade\n"
-    "- cidade ou CEP de entrega\n"
+    "- CEP de entrega\n"
     "- nome\n"
     "- email\n\n"
     "Se for atendimento corporativo, informe também o *CNPJ*."
@@ -135,7 +135,7 @@ MENSAGEM_ESTOQUE = (
     "Para verificarmos com precisão, envie:\n"
     "- produto ou modelo\n"
     "- quantidade desejada\n"
-    "- cidade de entrega\n"
+    "- CEP de entrega\n"
     "- nome\n"
     "- email\n\n"
     "Se a compra for para empresa, informe também o *CNPJ*."
@@ -159,7 +159,7 @@ MENSAGEM_PJ_REFORCO = (
     "- email\n"
     "- produto ou necessidade\n"
     "- quantidade\n"
-    "- cidade de entrega\n"
+    "- CEP de entrega\n"
     "- *CNPJ da empresa*\n\n"
     "Com isso conseguimos agilizar a análise comercial e o envio da proposta."
 )
@@ -228,7 +228,7 @@ def montar_resposta(texto_recebido):
             "Se possível, envie também:\n"
             "- produto ou modelo\n"
             "- quantidade\n"
-            "- cidade de entrega\n"
+            "- CEP de entrega\n"
             "- nome do responsável\n"
             "- email\n\n"
             "Com isso conseguimos acelerar a proposta."
@@ -236,7 +236,6 @@ def montar_resposta(texto_recebido):
 
     # Cliente quente: preço, prazo, estoque, entrega, pagamento etc.
     if contem_termo(texto, PALAVRAS_CLIENTE_QUENTE):
-        # respostas mais específicas
         if any(termo in texto for termo in ["preco", "preço", "valor", "quanto custa", "orcamento", "orçamento", "cotacao", "cotação"]):
             return MENSAGEM_PRECO
 
@@ -256,7 +255,7 @@ def montar_resposta(texto_recebido):
             "Se ainda não enviou, por favor informe também:\n"
             "- produto ou modelo\n"
             "- quantidade desejada\n"
-            "- cidade ou CEP de entrega\n\n"
+            "- CEP de entrega\n\n"
             "Em seguida, um vendedor da *TEC9 Informática* continuará seu atendimento."
         )
 
@@ -266,12 +265,11 @@ def montar_resposta(texto_recebido):
             "Agora, para avançarmos com sua solicitação, envie por favor:\n"
             "- produto ou modelo\n"
             "- quantidade\n"
-            "- cidade ou CEP de entrega\n\n"
+            "- CEP de entrega\n\n"
             "Se a compra for para empresa, informe também o *CNPJ*.\n\n"
             + MENSAGEM_ENCAMINHAMENTO_HUMANO
         )
 
-    # fallback profissional
     return MENSAGEM_PADRAO
 
 def responder_mensagem(numero, texto):
@@ -324,9 +322,6 @@ def health():
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    # ---------------------------------
-    # VALIDACAO DO WEBHOOK
-    # ---------------------------------
     if request.method == "GET":
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
@@ -344,9 +339,6 @@ def webhook():
         print("ERRO DE VERIFICACAO DO WEBHOOK", flush=True)
         return "Erro de verificacao", 403
 
-    # ---------------------------------
-    # RECEBIMENTO DE EVENTOS
-    # ---------------------------------
     data = request.get_json(silent=True)
     print("WEBHOOK RECEBIDO:", data, flush=True)
 
@@ -376,7 +368,6 @@ def webhook():
                         print("Mensagem sem remetente, ignorada.", flush=True)
                         continue
 
-                    # Processa mensagem de texto
                     if message_type == "text":
                         text_body = message.get("text", {}).get("body", "").strip()
                         print(f"MENSAGEM RECEBIDA DE {from_number}: {text_body}", flush=True)
