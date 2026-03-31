@@ -1,6 +1,7 @@
 import os
 import re
 import requests
+from urllib.parse import quote_plus
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -13,6 +14,11 @@ ACCESS_TOKEN = (os.getenv("META_ACCESS_TOKEN") or "").strip()
 PHONE_NUMBER_ID = (os.getenv("PHONE_NUMBER_ID") or "").strip()
 
 # =========================
+# CONFIGURACOES GERAIS
+# =========================
+BASE_BUSCA_SITE = "https://tec9informatica.com.br/busca?q="
+
+# =========================
 # AGENTES TEC9
 # =========================
 AGENTE_VENDAS = "Camila"
@@ -23,23 +29,6 @@ AGENTE_ESPECIALISTA = "Ricardo"
 # MEMORIA EM RAM
 # =========================
 memoria_clientes = {}
-
-# Estrutura exemplo:
-# memoria_clientes["5511999999999"] = {
-#     "setor": "vendas",
-#     "etapa": "aguardando_nome",
-#     "dados": {
-#         "nome": "",
-#         "produto": "",
-#         "quantidade": "",
-#         "email": "",
-#         "cnpj": "",
-#         "marca": "",
-#         "modelo": "",
-#         "duvida": "",
-#         "defeito": ""
-#     }
-# }
 
 # =========================
 # PALAVRAS-CHAVE
@@ -57,6 +46,20 @@ PALAVRAS_CLIENTE_QUENTE = [
     "prazo", "entrega", "estoque", "disponivel", "disponível",
     "pagamento", "pix", "boleto", "cartao", "cartão", "comprar",
     "cotacao", "cotação", "pedido", "frete", "urgente"
+]
+
+PALAVRAS_PRODUTO = [
+    "ssd", "hd", "hdd", "memoria", "memória", "notebook", "monitor",
+    "teclado", "mouse", "headset", "gabinete", "fonte", "processador",
+    "placa mae", "placa-mãe", "placa mãe", "placa de video", "placa de vídeo",
+    "impressora", "toner", "cartucho", "servidor", "switch", "roteador",
+    "access point", "nobreak", "webcam", "microfone", "scanner",
+    "leitor", "codigo de barras", "código de barras", "gaveta de dinheiro",
+    "pdv", "automacao comercial", "automação comercial", "desktop", "pc gamer",
+    "all in one", "all-in-one", "mini pc", "estabilizador", "epson",
+    "brother", "dell", "lenovo", "hp", "acer", "asus", "logitech",
+    "kingston", "crucial", "samsung", "lg", "aoc", "philips", "tplink",
+    "tp-link", "intel", "amd", "nvidia"
 ]
 
 # =========================
@@ -83,6 +86,29 @@ def contem_palavra(texto, palavras):
 
 def cliente_quente(texto):
     return contem_palavra(texto, PALAVRAS_CLIENTE_QUENTE)
+
+def detectar_interesse_produto(texto):
+    texto_norm = normalizar_texto(texto)
+    return any(p in texto_norm for p in PALAVRAS_PRODUTO)
+
+def montar_link_busca(consulta):
+    consulta_limpa = consulta.strip()
+    return f"{BASE_BUSCA_SITE}{quote_plus(consulta_limpa)}"
+
+def resposta_produto(texto):
+    link = montar_link_busca(texto)
+    return (
+        f"💰 *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
+        "Perfeito! Encontrei uma busca relacionada ao produto que você procura.\n\n"
+        f"👉 {link}\n\n"
+        "Para eu te ajudar de forma mais precisa, me envie por favor:\n"
+        "- Nome\n"
+        "- quantidade desejada\n"
+        "- nome do produto ou modelo\n"
+        "- email\n\n"
+        "Se a compra for para empresa, informe também o *CNPJ*.\n\n"
+        "Assim conseguiremos encaminhar uma proposta mais precisa e rápida."
+    )
 
 def iniciar_memoria(numero):
     memoria_clientes[numero] = {
@@ -197,6 +223,7 @@ def processar_fluxo_vendas(texto, memoria):
         if cnpj:
             dados["cnpj"] = cnpj
             memoria["etapa"] = "finalizado_vendas"
+            link = montar_link_busca(dados["produto"])
             return (
                 f"✅ *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
                 "Perfeito. Recebemos suas informações para atendimento corporativo.\n\n"
@@ -206,12 +233,15 @@ def processar_fluxo_vendas(texto, memoria):
                 f"- Produto/Modelo: {dados['produto']}\n"
                 f"- Email: {dados['email']}\n"
                 f"- CNPJ: {dados['cnpj']}\n\n"
+                "Busca relacionada no site:\n"
+                f"👉 {link}\n\n"
                 "Sua solicitação foi encaminhada para análise comercial.\n"
                 "Em breve daremos continuidade com a proposta."
             )
 
         if texto_norm in ["nao tenho cnpj", "não tenho cnpj", "nao", "não", "pf", "pessoa fisica", "pessoa física"]:
             memoria["etapa"] = "finalizado_vendas"
+            link = montar_link_busca(dados["produto"])
             return (
                 f"✅ *{AGENTE_VENDAS} | Consultora Comercial TEC9*\n\n"
                 "Perfeito. Recebemos suas informações.\n\n"
@@ -220,6 +250,8 @@ def processar_fluxo_vendas(texto, memoria):
                 f"- Quantidade: {dados['quantidade']}\n"
                 f"- Produto/Modelo: {dados['produto']}\n"
                 f"- Email: {dados['email']}\n\n"
+                "Busca relacionada no site:\n"
+                f"👉 {link}\n\n"
                 "Sua solicitação foi encaminhada para análise comercial.\n"
                 "Em breve daremos continuidade com a proposta."
             )
@@ -412,12 +444,10 @@ def processar_mensagem(numero, texto):
     texto_norm = normalizar_texto(texto)
     memoria = obter_memoria(numero)
 
-    # Comando para voltar ao menu
     if texto_norm in PALAVRAS_REINICIAR or texto_norm in PALAVRAS_MENU:
         limpar_memoria(numero)
         return menu_principal()
 
-    # Se ainda está no menu principal
     if memoria["etapa"] == "menu_principal":
         if texto_norm == "1":
             return iniciar_fluxo_vendas(memoria)
@@ -433,9 +463,11 @@ def processar_mensagem(numero, texto):
             memoria["etapa"] = "aguardando_nome"
             return resposta_cliente_quente()
 
+        if detectar_interesse_produto(texto_norm):
+            return resposta_produto(texto)
+
         return menu_principal()
 
-    # Fluxos com memoria
     if memoria["setor"] == "vendas":
         return processar_fluxo_vendas(texto, memoria)
 
@@ -485,7 +517,7 @@ def responder(numero, texto):
 # =========================
 @app.route("/", methods=["GET"])
 def home():
-    return "TEC9 BOT ONLINE COM MEMORIA 🚀", 200
+    return "TEC9 BOT ONLINE COM MEMORIA E BUSCA DE PRODUTOS 🚀", 200
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -525,12 +557,10 @@ def webhook():
             for change in entry.get("changes", []):
                 value = change.get("value", {})
 
-                # Ignora status
                 if "statuses" in value:
                     print("STATUS IGNORADO:", value.get("statuses"), flush=True)
                     continue
 
-                # Processa apenas mensagens
                 if "messages" not in value:
                     print("Evento ignorado (sem mensagem)", flush=True)
                     continue
