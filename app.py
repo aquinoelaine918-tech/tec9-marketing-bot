@@ -1,82 +1,107 @@
-from flask import Flask, request
-import requests
 import os
+import requests
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Configurações das Variáveis de Ambiente do Railway
+# =========================
+# VARIÁVEIS (Railway)
+# =========================
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-@app.route('/webhook', methods=['GET'])
-def verify():
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    if token == VERIFY_TOKEN:
-        return challenge, 200
-    return "Token inválido", 403
 
-@app.route('/webhook', methods=['POST'])
+# =========================
+# TESTE ONLINE
+# =========================
+@app.route("/", methods=["GET"])
+def home():
+    return "TEC9 BOT ONLINE 🚀", 200
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return "OK", 200
+
+
+# =========================
+# WEBHOOK (META)
+# =========================
+@app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    data = request.get_json()
-    print("Dados brutos recebidos:", data) # Para você ver nos logs
 
-    try:
-        # A estrutura da Meta é complexa: entry -> changes -> value -> messages
-        if data.get('entry') and data['entry'][0].get('changes'):
-            value = data['entry'][0]['changes'][0].get('value')
-            
-            if value and 'messages' in value:
-                message = value['messages'][0]
-                from_number = message['from']
-                
-                # Verifica se é uma mensagem de texto
-                if message.get('type') == 'text':
-                    text_received = message['text']['body'].lower().strip()
-                    print(f"Mensagem de {from_number}: {text_received}")
+    # ===== VERIFICAÇÃO META =====
+    if request.method == "GET":
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-                    # Lógica do Menu TEC9
-                    if text_received in ["oi", "olá", "ola", "menu"]:
-                        resposta = (
-                            "Olá! Bem-vindo à *TEC9 Informática*! 💻\n\n"
-                            "Como podemos ajudar?\n"
-                            "1️⃣ - Suporte Técnico\n"
-                            "2️⃣ - Orçamentos\n"
-                            "3️⃣ - Falar com atendente"
-                        )
-                    elif text_received == "1":
-                        resposta = "🔧 *Suporte:* Descreva seu problema e responderemos em breve."
-                    elif text_received == "2":
-                        resposta = "💰 *Orçamentos:* Acesse tec9informatica.com.br"
-                    elif text_received == "3":
-                        resposta = "👤 *Atendimento:* Aguarde um momento..."
-                    else:
-                        resposta = "Digite *OI* para ver o menu."
+        if token == VERIFY_TOKEN:
+            return challenge, 200
+        else:
+            return "Erro de verificação", 403
 
-                    enviar_mensagem(from_number, resposta)
+    # ===== RECEBER EVENTOS =====
+    if request.method == "POST":
+        data = request.get_json(silent=True)
 
-    except Exception as e:
-        print(f"Erro ao processar: {e}")
+        print("Webhook recebido:", data, flush=True)
 
-    return "ok", 200
+        try:
+            entry = data["entry"][0]
+            changes = entry["changes"][0]
+            value = changes["value"]
 
-def enviar_mensagem(numero, texto_enviar):
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
-    payload = {
+            if "messages" in value:
+                message = value["messages"][0]
+                numero = message["from"]
+
+                tipo = message.get("type")
+
+                if tipo == "text":
+                    texto = message["text"]["body"]
+                else:
+                    texto = f"Tipo recebido: {tipo}"
+
+                print("Mensagem:", texto, flush=True)
+
+                responder(numero, texto)
+
+        except Exception as e:
+            print("Erro:", e, flush=True)
+
+        return jsonify({"status": "ok"}), 200
+
+
+# =========================
+# ENVIAR RESPOSTA
+# =========================
+def responder(numero, texto_recebido):
+
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+
+    mensagem = {
         "messaging_product": "whatsapp",
         "to": numero,
         "type": "text",
-        "text": {"body": texto_enviar}
+        "text": {
+            "body": f"Olá! 👋\n\nRecebi sua mensagem:\n👉 {texto_recebido}\n\nComo posso te ajudar hoje?"
+        }
     }
+
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
-    response = requests.post(url, json=payload, headers=headers)
-    print("Resposta da Meta:", response.text)
 
+    response = requests.post(url, json=mensagem, headers=headers)
+
+    print("Resposta enviada:", response.text, flush=True)
+
+
+# =========================
+# RAILWAY PORTA DINÂMICA
+# =========================
 if __name__ == "__main__":
-    # Garante que o Railway não derrube o container
     port = int(os.environ.get("PORT", 3000))
     app.run(host="0.0.0.0", port=port)
