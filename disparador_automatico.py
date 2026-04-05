@@ -16,7 +16,7 @@ EMAIL_RELATORIO = "comercial@tec9informatica.com.br"
 ARQUIVO_CLIENTES = "Clientes_TEC9.csv"
 ARQUIVO_HISTORICO = "historico_envios.csv"
 
-LIMITE_DIARIO = 300
+LIMITE_DIARIO = 5
 
 # ================= CAMPANHAS =================
 
