@@ -13,7 +13,7 @@ REMETENTE_NOME = "TEC9 Informática"
 
 EMAIL_RELATORIO = "comercial@tec9informatica.com.br"
 
-ARQUIVO_CLIENTES = "Clientes_TEC9.csv"
+ARQUIVO_CLIENTES = "Clientes_TEC9.xlsx"
 ARQUIVO_HISTORICO = "historico_envios.csv"
 
 LIMITE_DIARIO = 5
