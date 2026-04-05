@@ -13,9 +13,11 @@ REMETENTE_NOME = "TEC9 Informática"
 
 EMAIL_RELATORIO = "comercial@tec9informatica.com.br"
 
+# AJUSTADO PARA EXCEL (.xlsx) conforme seu print do Brevo
 ARQUIVO_CLIENTES = "Clientes_TEC9.xlsx"
 ARQUIVO_HISTORICO = "historico_envios.csv"
 
+# Limite de 5 para o teste de agora (depois mude para 300)
 LIMITE_DIARIO = 5
 
 # ================= CAMPANHAS =================
@@ -30,16 +32,6 @@ CAMPANHAS = [
         "nome": "SEMANA_2",
         "assunto": "Empresas estão economizando com TI — veja como",
         "html": "<p>Temos soluções completas para empresas que querem economizar e crescer.<br><br>Conte com a TEC9.</p>"
-    },
-    {
-        "nome": "SEMANA_3",
-        "assunto": "Equipamentos profissionais com melhor custo-benefício",
-        "html": "<p>Ofertas especiais em equipamentos para empresas.<br><br>Solicite orçamento com a TEC9.</p>"
-    },
-    {
-        "nome": "SEMANA_4",
-        "assunto": "Condição especial TEC9 para empresas",
-        "html": "<p>Condições exclusivas disponíveis esta semana.<br><br>Entre em contato agora.</p>"
     }
 ]
 
@@ -51,7 +43,8 @@ def obter_campanha():
 
 
 def carregar_clientes():
-    df = pd.read_csv(ARQUIVO_CLIENTES)
+    # AJUSTADO PARA LER EXCEL (.xlsx)
+    df = pd.read_excel(ARQUIVO_CLIENTES)
     df.columns = [c.lower().strip() for c in df.columns]
     return df
 
@@ -76,7 +69,7 @@ def filtrar_clientes(df_clientes, df_historico):
 
 
 def enviar_email(email, campanha):
-    url = "https://api.brevo.com/v3/smtp/email"
+    url = "https://brevo.com"
 
     headers = {
         "api-key": API_KEY,
@@ -112,7 +105,7 @@ def salvar_historico(registros):
 
 
 def enviar_relatorio(enviados, campanha_nome):
-    url = "https://api.brevo.com/v3/smtp/email"
+    url = "https://brevo.com"
 
     headers = {
         "api-key": API_KEY,
@@ -147,41 +140,45 @@ def main():
     campanha = obter_campanha()
     print(f"📢 Campanha atual: {campanha['nome']}")
 
-    clientes = carregar_clientes()
-    historico = carregar_historico()
+    try:
+        clientes = carregar_clientes()
+        historico = carregar_historico()
 
-    lista_envio = filtrar_clientes(clientes, historico)
+        lista_envio = filtrar_clientes(clientes, historico)
 
-    print(f"📧 Total de envios hoje: {len(lista_envio)}")
+        print(f"📧 Total de envios hoje: {len(lista_envio)}")
 
-    enviados = 0
-    registros = []
+        enviados = 0
+        registros = []
 
-    for i, row in lista_envio.iterrows():
-        email = row["email"]
+        for i, row in lista_envio.iterrows():
+            email = row["email"]
 
-        status = enviar_email(email, campanha)
+            status = enviar_email(email, campanha)
 
-        if status in [200, 201, 202]:
-            enviados += 1
-            print(f"✅ [{enviados}] {email}")
+            if status in [200, 201, 202]:
+                enviados += 1
+                print(f"✅ [{enviados}] {email}")
 
-            registros.append({
-                "email": email,
-                "data": datetime.now(),
-                "campanha": campanha["nome"]
-            })
-        else:
-            print(f"❌ ERRO: {email}")
+                registros.append({
+                    "email": email,
+                    "data": datetime.now(),
+                    "campanha": campanha["nome"]
+                })
+            else:
+                print(f"❌ ERRO: {email} - Status: {status}")
 
-        time.sleep(0.4)
+            time.sleep(0.4)
 
-    salvar_historico(registros)
+        if enviados > 0:
+            salvar_historico(registros)
+            enviar_relatorio(enviados, campanha["nome"])
 
-    enviar_relatorio(enviados, campanha["nome"])
+        print("📊 FINALIZADO")
+        print(f"Enviados com sucesso: {enviados}")
 
-    print("📊 FINALIZADO")
-    print(f"Enviados com sucesso: {enviados}")
+    except Exception as e:
+        print(f"❌ ERRO CRÍTICO: {e}")
 
 
 if __name__ == "__main__":
