@@ -13,8 +13,8 @@ REMETENTE_NOME = "TEC9 Informática"
 
 EMAIL_RELATORIO = "comercial@tec9informatica.com.br"
 
-# AJUSTADO PARA EXCEL (.xlsx) conforme seu print do Brevo
-ARQUIVO_CLIENTES = "Clientes_TEC9.xlsx"
+# NOME EXATO DO ARQUIVO QUE APARECE NO SEU GITHUB
+ARQUIVO_CLIENTES = "Clientes_TEC9.xlsx.csv"
 ARQUIVO_HISTORICO = "historico_envios.csv"
 
 # Limite de 5 para o teste de agora (depois mude para 300)
@@ -27,24 +27,21 @@ CAMPANHAS = [
         "nome": "SEMANA_1",
         "assunto": "Sua empresa pode estar gastando mais do que deveria com TI",
         "html": "<p>Olá, tudo bem?<br><br>Podemos ajudar sua empresa a reduzir custos com tecnologia e melhorar desempenho.<br><br>Fale com a TEC9.</p>"
-    },
-    {
-        "nome": "SEMANA_2",
-        "assunto": "Empresas estão economizando com TI — veja como",
-        "html": "<p>Temos soluções completas para empresas que querem economizar e crescer.<br><br>Conte com a TEC9.</p>"
     }
 ]
 
 # ================= FUNÇÕES =================
 
 def obter_campanha():
+    # Pega a campanha baseada na semana do ano
     semana = datetime.now().isocalendar()[1]
     return CAMPANHAS[semana % len(CAMPANHAS)]
 
 
 def carregar_clientes():
-    # AJUSTADO PARA LER EXCEL (.xlsx)
-    df = pd.read_excel(ARQUIVO_CLIENTES)
+    # Lendo o arquivo CSV que está no seu GitHub
+    df = pd.read_csv(ARQUIVO_CLIENTES)
+    # Padroniza os nomes das colunas (tira espaços e deixa minúsculo)
     df.columns = [c.lower().strip() for c in df.columns]
     return df
 
@@ -57,12 +54,15 @@ def carregar_historico():
 
 def filtrar_clientes(df_clientes, df_historico):
     hoje = datetime.now()
-    limite = hoje - timedelta(days=7)
+    limite = hoy = hoje - timedelta(days=7)
 
+    # Garante que a coluna de data seja lida corretamente
     df_historico["data"] = pd.to_datetime(df_historico["data"], errors="coerce")
 
+    # Lista quem já recebeu e-mail nos últimos 7 dias
     enviados = df_historico[df_historico["data"] >= limite]["email"].unique()
 
+    # Filtra quem ainda não recebeu
     df_filtrado = df_clientes[~df_clientes["email"].isin(enviados)]
 
     return df_filtrado.head(LIMITE_DIARIO)
@@ -116,7 +116,7 @@ def enviar_relatorio(enviados, campanha_nome):
     <h2>📊 Relatório TEC9</h2>
     <p><b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
     <p><b>Campanha:</b> {campanha_nome}</p>
-    <p><b>Emails enviados:</b> {enviados}</p>
+    <p><b>Emails enviados hoje:</b> {enviados}</p>
     """
 
     payload = {
@@ -141,16 +141,20 @@ def main():
     print(f"📢 Campanha atual: {campanha['nome']}")
 
     try:
+        # 1. Carrega os 120 contatos
         clientes = carregar_clientes()
+        # 2. Carrega quem já recebeu antes
         historico = carregar_historico()
 
+        # 3. Filtra para enviar apenas 5 por vez (limite de teste)
         lista_envio = filtrar_clientes(clientes, historico)
 
-        print(f"📧 Total de envios hoje: {len(lista_envio)}")
+        print(f"📧 Total de envios programados para agora: {len(lista_envio)}")
 
         enviados = 0
         registros = []
 
+        # 4. Loop de envio
         for i, row in lista_envio.iterrows():
             email = row["email"]
 
@@ -168,14 +172,14 @@ def main():
             else:
                 print(f"❌ ERRO: {email} - Status: {status}")
 
-            time.sleep(0.4)
+            time.sleep(1) # Espera 1 segundo entre envios
 
+        # 5. Salva quem recebeu e manda o relatório
         if enviados > 0:
             salvar_historico(registros)
             enviar_relatorio(enviados, campanha["nome"])
 
         print("📊 FINALIZADO")
-        print(f"Enviados com sucesso: {enviados}")
 
     except Exception as e:
         print(f"❌ ERRO CRÍTICO: {e}")
