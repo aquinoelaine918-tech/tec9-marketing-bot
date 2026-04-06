@@ -21,7 +21,7 @@ ARQUIVOS_CLIENTES_POSSIVEIS = [
 ARQUIVO_HISTORICO = "historico_envios.csv"
 
 # Limite de teste agora
-LIMITE_DIARIO = 300
+LIMITE_DIARIO = 5000
 
 # URL CORRETA DA API BREVO
 URL_ENVIO_BREVO = "https://api.brevo.com/v3/smtp/email"
