@@ -1,2 +1,5 @@
-pandas
+flask
+gunicorn
 requests
+python-dotenv
+openai
