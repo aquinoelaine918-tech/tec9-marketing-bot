@@ -70,7 +70,7 @@ def carregar_clientes():
     if arquivo.lower().endswith(".xlsx"):
         df = pd.read_excel(arquivo)
     else:
-        df = pd.read_csv(arquivo)
+      df = pd.read_csv(arquivo, on_bad_lines='skip', sep=',', engine='python')
 
     df.columns = [str(c).lower().strip() for c in df.columns]
 
