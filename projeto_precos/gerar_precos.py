@@ -7,7 +7,6 @@ from email.message import EmailMessage
 # =========================
 # CONFIGURAÇÕES
 # =========================
-
 ARQUIVO_ENTRADA = os.getenv("ARQUIVO_ENTRADA", "produtos_atualizados.xlsx")
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "."))
 ARQUIVO_SAIDA = OUTPUT_DIR / os.getenv("ARQUIVO_SAIDA", "precificacao_automatica.xlsx")
@@ -47,12 +46,17 @@ df.columns = df.columns.str.strip().str.upper()
 if "PRODUTO" not in df.columns:
     df["PRODUTO"] = ""
 
+colunas_necessarias = ["SKU", "CUSTO_TRATADO", "PRECO_VENDA", "MARGEM_%"]
+for coluna in colunas_necessarias:
+    if coluna not in df.columns:
+        raise Exception(f"Coluna obrigatória não encontrada: {coluna}")
+
 # =========================
 # CALCULOS
 # =========================
-df["PRECO_SUGERIDO"] = df["CUSTO"] * (1 + MARGEM_MINIMA / 100)
+df["PRECO_SUGERIDO"] = df["CUSTO_TRATADO"] * (1 + MARGEM_MINIMA / 100)
 
-df["DIFERENCA_R$"] = df["PRECO"] - df["PRECO_SUGERIDO"]
+df["DIFERENCA_R$"] = df["PRECO_VENDA"] - df["PRECO_SUGERIDO"]
 df["DIFERENCA_%"] = (df["DIFERENCA_R$"] / df["PRECO_SUGERIDO"]) * 100
 
 # =========================
@@ -91,10 +95,27 @@ df["ACAO"] = df.apply(acao, axis=1)
 resumo = df["STATUS"].value_counts()
 
 total = len(df)
-competitivo = resumo.get("COMPETITIVO", 0)
-acima = resumo.get("ACIMA DO MERCADO", 0)
-abaixo = resumo.get("ABAIXO DO MERCADO", 0)
-urgente = resumo.get("AJUSTE URGENTE", 0)
+competitivo = int(resumo.get("COMPETITIVO", 0))
+acima = int(resumo.get("ACIMA DO MERCADO", 0))
+abaixo = int(resumo.get("ABAIXO DO MERCADO", 0))
+urgente = int(resumo.get("AJUSTE URGENTE", 0))
+
+# =========================
+# ORGANIZAR COLUNAS
+# =========================
+colunas_finais = [
+    "SKU",
+    "PRODUTO",
+    "CUSTO_TRATADO",
+    "PRECO_VENDA",
+    "MARGEM_%",
+    "PRECO_SUGERIDO",
+    "DIFERENCA_R$",
+    "DIFERENCA_%",
+    "STATUS",
+    "ACAO",
+]
+df = df[colunas_finais]
 
 # =========================
 # SALVAR EXCEL
