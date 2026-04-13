@@ -31,14 +31,30 @@ EMAIL_TO = os.getenv("EMAIL_TO")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =========================
-# LEITURA
+# LEITURA E PADRONIZAÇÃO
 # =========================
-df = pd.read_excel(ARQUIVO_ENTRADA)
+try:
+    df = pd.read_excel(ARQUIVO_ENTRADA)
+    
+    # Limpa espaços e coloca tudo em MAIÚSCULO
+    df.columns = df.columns.str.strip().str.upper()
 
-# =========================
-# PADRONIZAÇÃO
-# =========================
-df.columns = df.columns.str.strip().str.upper()
+    # LOG DE SEGURANÇA: Mostra o que o script achou no Excel
+    print(f"--- Colunas detectadas no arquivo: {df.columns.tolist()}")
+
+    # MAPEAMENTO FLEXÍVEL (Se a coluna tiver outro nome, ele corrige aqui)
+    mapeamento = {
+        'CUSTO': 'CUSTO_TRATADO',
+        'VALOR_CUSTO': 'CUSTO_TRATADO',
+        'PRECO': 'PRECO_VENDA',
+        'VALOR_VENDA': 'PRECO_VENDA',
+        'MARGEM': 'MARGEM_%'
+    }
+    df.rename(columns=mapeamento, inplace=True)
+
+except Exception as e:
+    print(f"Erro ao ler o arquivo {ARQUIVO_ENTRADA}: {e}")
+    exit(1)
 
 # =========================
 # GARANTIR COLUNAS
@@ -49,13 +65,16 @@ if "PRODUTO" not in df.columns:
 colunas_necessarias = ["SKU", "CUSTO_TRATADO", "PRECO_VENDA", "MARGEM_%"]
 for coluna in colunas_necessarias:
     if coluna not in df.columns:
-        raise Exception(f"Coluna obrigatória não encontrada: {coluna}")
+        # Erro detalhado para você saber qual coluna faltou no Excel
+        raise Exception(f"ERRO: A coluna '{coluna}' não existe no Excel. Verifique o arquivo!")
 
 # =========================
-# CALCULOS
+# CALCULOS (Com tratamento para evitar erro de tipo)
 # =========================
+df["CUSTO_TRATADO"] = pd.to_numeric(df["CUSTO_TRATADO"], errors='coerce')
+df["PRECO_VENDA"] = pd.to_numeric(df["PRECO_VENDA"], errors='coerce')
+
 df["PRECO_SUGERIDO"] = df["CUSTO_TRATADO"] * (1 + MARGEM_MINIMA / 100)
-
 df["DIFERENCA_R$"] = df["PRECO_VENDA"] - df["PRECO_SUGERIDO"]
 df["DIFERENCA_%"] = (df["DIFERENCA_R$"] / df["PRECO_SUGERIDO"]) * 100
 
@@ -63,6 +82,7 @@ df["DIFERENCA_%"] = (df["DIFERENCA_R$"] / df["PRECO_SUGERIDO"]) * 100
 # CLASSIFICAÇÃO
 # =========================
 def classificar(row):
+    if pd.isna(row["DIFERENCA_%"]): return "ERRO_DADOS"
     if row["DIFERENCA_%"] < -AJUSTE_URGENTE:
         return "AJUSTE URGENTE"
     elif row["DIFERENCA_%"] < -TOLERANCIA:
@@ -156,7 +176,6 @@ Acima do mercado: {acima}
 Abaixo do mercado: {abaixo}
 Ajuste urgente: {urgente}
 """
-
         msg.set_content(corpo)
 
         with open(ARQUIVO_SAIDA, "rb") as f:
