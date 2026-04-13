@@ -1,197 +1,260 @@
 import os
-import pandas as pd
+import time
 from pathlib import Path
-import smtplib
-from email.message import EmailMessage
 
-# =========================
+import pandas as pd
+
+
+# =========================================================
 # CONFIGURAÇÕES
-# =========================
+# =========================================================
 ARQUIVO_ENTRADA = os.getenv("ARQUIVO_ENTRADA", "produtos_atualizados.xlsx")
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "."))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/data"))
 ARQUIVO_SAIDA = OUTPUT_DIR / os.getenv("ARQUIVO_SAIDA", "precificacao_automatica.xlsx")
 
-MARGEM_MINIMA = float(os.getenv("MARGEM_MINIMA_SEGURANCA", 15))
-TOLERANCIA = float(os.getenv("TOLERANCIA_COMPETITIVA", 3))
-AJUSTE_URGENTE = float(os.getenv("AJUSTE_URGENTE", 8))
-ALVO = float(os.getenv("ALVO_COMPETITIVO", 1.5))
+# tolerâncias
+TOLERANCIA_COMPETITIVO = float(os.getenv("TOLERANCIA_COMPETITIVO", "3"))   # %
+AJUSTE_URGENTE = float(os.getenv("AJUSTE_URGENTE", "10"))                  # %
+MARGEM_PADRAO = float(os.getenv("MARGEM_PADRAO", "25"))                    # %
 
-EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+# se quiser manter o container "online" no Railway
+MANTER_ATIVO = os.getenv("MANTER_ATIVO", "true").strip().lower() == "true"
+TEMPO_ESPERA_SEGUNDOS = int(os.getenv("TEMPO_ESPERA_SEGUNDOS", "3600"))
 
-SMTP_HOST = os.getenv("SMTP_HOST")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_TO = os.getenv("EMAIL_TO")
 
-# =========================
-# GARANTIR PASTA
-# =========================
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# =========================================================
+# FUNÇÕES AUXILIARES
+# =========================================================
+def normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Renomeia colunas comuns para um padrão único.
+    """
+    mapa = {
+        "sku": "SKU",
+        "SKU": "SKU",
 
-# =========================
-# LEITURA E PADRONIZAÇÃO
-# =========================
-try:
-    df = pd.read_excel(ARQUIVO_ENTRADA)
-    
-    # Limpa espaços e coloca tudo em MAIÚSCULO
-    df.columns = df.columns.str.strip().str.upper()
+        "produto": "PRODUTO",
+        "PRODUTO": "PRODUTO",
+        "title": "PRODUTO",
 
-    # LOG DE SEGURANÇA: Mostra o que o script achou no Excel
-    print(f"--- Colunas detectadas no arquivo: {df.columns.tolist()}")
+        "custo": "CUSTO",
+        "CUSTO": "CUSTO",
+        "CUSTO_TRATADO": "CUSTO",
 
-    # MAPEAMENTO FLEXÍVEL (Se a coluna tiver outro nome, ele corrige aqui)
-    mapeamento = {
-        'CUSTO': 'CUSTO_TRATADO',
-        'VALOR_CUSTO': 'CUSTO_TRATADO',
-        'PRECO': 'PRECO_VENDA',
-        'VALOR_VENDA': 'PRECO_VENDA',
-        'MARGEM': 'MARGEM_%'
+        "preco_venda": "PRECO_VENDA",
+        "PRECO_VENDA": "PRECO_VENDA",
+        "venda": "PRECO_VENDA",
+        "VENDA": "PRECO_VENDA",
+
+        "preco_sugerido": "PRECO_SUGERIDO",
+        "PRECO_SUGERIDO": "PRECO_SUGERIDO",
+
+        "margem_%": "MARGEM_%",
+        "MARGEM_%": "MARGEM_%",
+        "margem": "MARGEM_%",
+        "MARGEM": "MARGEM_%",
     }
-    df.rename(columns=mapeamento, inplace=True)
 
-except Exception as e:
-    print(f"Erro ao ler o arquivo {ARQUIVO_ENTRADA}: {e}")
-    exit(1)
+    novas_colunas = {}
+    for col in df.columns:
+        col_limpa = str(col).strip()
+        if col_limpa in mapa:
+            novas_colunas[col] = mapa[col_limpa]
+        else:
+            novas_colunas[col] = col_limpa
 
-# =========================
-# GARANTIR COLUNAS
-# =========================
-if "PRODUTO" not in df.columns:
-    df["PRODUTO"] = ""
+    df = df.rename(columns=novas_colunas)
+    return df
 
-colunas_necessarias = ["SKU", "CUSTO_TRATADO", "PRECO_VENDA", "MARGEM_%"]
-for coluna in colunas_necessarias:
-    if coluna not in df.columns:
-        # Erro detalhado para você saber qual coluna faltou no Excel
-        raise Exception(f"ERRO: A coluna '{coluna}' não existe no Excel. Verifique o arquivo!")
 
-# =========================
-# CALCULOS (Com tratamento para evitar erro de tipo)
-# =========================
-df["CUSTO_TRATADO"] = pd.to_numeric(df["CUSTO_TRATADO"], errors='coerce')
-df["PRECO_VENDA"] = pd.to_numeric(df["PRECO_VENDA"], errors='coerce')
+def converter_numero(valor):
+    """
+    Converte textos numéricos brasileiros e gerais para float.
+    Exemplos:
+    1.350,00 -> 1350.00
+    185,9    -> 185.90
+    1900     -> 1900.00
+    """
+    if pd.isna(valor):
+        return 0.0
 
-df["PRECO_SUGERIDO"] = df["CUSTO_TRATADO"] * (1 + MARGEM_MINIMA / 100)
-df["DIFERENCA_R$"] = df["PRECO_VENDA"] - df["PRECO_SUGERIDO"]
-df["DIFERENCA_%"] = (df["DIFERENCA_R$"] / df["PRECO_SUGERIDO"]) * 100
+    texto = str(valor).strip()
 
-# =========================
-# CLASSIFICAÇÃO
-# =========================
-def classificar(row):
-    if pd.isna(row["DIFERENCA_%"]): return "ERRO_DADOS"
-    if row["DIFERENCA_%"] < -AJUSTE_URGENTE:
-        return "AJUSTE URGENTE"
-    elif row["DIFERENCA_%"] < -TOLERANCIA:
+    if texto == "":
+        return 0.0
+
+    texto = texto.replace("R$", "").replace(" ", "")
+
+    # caso brasileiro com milhar e vírgula decimal
+    if "." in texto and "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif "," in texto:
+        texto = texto.replace(",", ".")
+
+    try:
+        return float(texto)
+    except ValueError:
+        return 0.0
+
+
+def classificar_status(diferenca_percentual: float) -> str:
+    """
+    Classifica conforme diferença entre PRECO_VENDA e PRECO_SUGERIDO.
+    """
+    if abs(diferenca_percentual) <= TOLERANCIA_COMPETITIVO:
+        return "COMPETITIVO"
+    elif diferenca_percentual > AJUSTE_URGENTE:
+        return "ACIMA DO MERCADO"
+    elif diferenca_percentual < -AJUSTE_URGENTE:
         return "ABAIXO DO MERCADO"
-    elif row["DIFERENCA_%"] > TOLERANCIA:
+    elif diferenca_percentual > 0:
         return "ACIMA DO MERCADO"
     else:
-        return "COMPETITIVO"
+        return "ABAIXO DO MERCADO"
 
-df["STATUS"] = df.apply(classificar, axis=1)
 
-# =========================
-# AÇÃO AUTOMÁTICA
-# =========================
-def acao(row):
-    if row["STATUS"] == "AJUSTE URGENTE":
-        return "SUBIR PREÇO URGENTE"
-    elif row["STATUS"] == "ABAIXO DO MERCADO":
-        return "SUBIR PREÇO"
-    elif row["STATUS"] == "ACIMA DO MERCADO":
-        return "REDUZIR PREÇO"
+def preparar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    df = normalizar_colunas(df)
+
+    print(f"--- Colunas detectadas no arquivo: {list(df.columns)}")
+
+    # colunas obrigatórias mínimas
+    obrigatorias = ["SKU", "PRODUTO", "CUSTO"]
+    for coluna in obrigatorias:
+        if coluna not in df.columns:
+            raise Exception(f"ERRO: A coluna '{coluna}' não existe no Excel. Verifique o arquivo!")
+
+    # se não houver PRECO_VENDA, mas houver PRECO_SUGERIDO, usa como venda atual
+    if "PRECO_VENDA" not in df.columns:
+        if "PRECO_SUGERIDO" in df.columns:
+            df["PRECO_VENDA"] = df["PRECO_SUGERIDO"]
+        else:
+            raise Exception("ERRO: A coluna 'PRECO_VENDA' não existe no Excel. Verifique o arquivo!")
+
+    # margem
+    if "MARGEM_%" not in df.columns:
+        df["MARGEM_%"] = MARGEM_PADRAO
+
+    # conversões
+    df["SKU"] = df["SKU"].astype(str).str.strip()
+    df["PRODUTO"] = df["PRODUTO"].astype(str).str.strip()
+    df["CUSTO"] = df["CUSTO"].apply(converter_numero)
+    df["PRECO_VENDA"] = df["PRECO_VENDA"].apply(converter_numero)
+    df["MARGEM_%"] = df["MARGEM_%"].apply(converter_numero)
+
+    # remove linhas sem sku
+    df = df[df["SKU"] != ""].copy()
+
+    # remove custo zero
+    df = df[df["CUSTO"] > 0].copy()
+
+    return df
+
+
+def gerar_analise(df: pd.DataFrame) -> pd.DataFrame:
+    # se já existir PRECO_SUGERIDO no arquivo, ele será usado como referência
+    # se não existir, será calculado pela margem
+    if "PRECO_SUGERIDO" in df.columns:
+        df["PRECO_SUGERIDO"] = df["PRECO_SUGERIDO"].apply(converter_numero)
+        df.loc[df["PRECO_SUGERIDO"] <= 0, "PRECO_SUGERIDO"] = df["CUSTO"] * (
+            1 + df["MARGEM_%"] / 100
+        )
     else:
-        return "MANTER"
+        df["PRECO_SUGERIDO"] = df["CUSTO"] * (1 + df["MARGEM_%"] / 100)
 
-df["ACAO"] = df.apply(acao, axis=1)
+    df["DIFERENCA_R$"] = df["PRECO_VENDA"] - df["PRECO_SUGERIDO"]
 
-# =========================
-# RESUMO BI
-# =========================
-resumo = df["STATUS"].value_counts()
+    df["DIFERENCA_%"] = 0.0
+    mask = df["PRECO_SUGERIDO"] > 0
+    df.loc[mask, "DIFERENCA_%"] = (
+        (df.loc[mask, "PRECO_VENDA"] - df.loc[mask, "PRECO_SUGERIDO"])
+        / df.loc[mask, "PRECO_SUGERIDO"]
+        * 100
+    )
 
-total = len(df)
-competitivo = int(resumo.get("COMPETITIVO", 0))
-acima = int(resumo.get("ACIMA DO MERCADO", 0))
-abaixo = int(resumo.get("ABAIXO DO MERCADO", 0))
-urgente = int(resumo.get("AJUSTE URGENTE", 0))
+    df["STATUS"] = df["DIFERENCA_%"].apply(classificar_status)
 
-# =========================
-# ORGANIZAR COLUNAS
-# =========================
-colunas_finais = [
-    "SKU",
-    "PRODUTO",
-    "CUSTO_TRATADO",
-    "PRECO_VENDA",
-    "MARGEM_%",
-    "PRECO_SUGERIDO",
-    "DIFERENCA_R$",
-    "DIFERENCA_%",
-    "STATUS",
-    "ACAO",
-]
-df = df[colunas_finais]
+    # ordem final
+    colunas_finais = [
+        "SKU",
+        "PRODUTO",
+        "CUSTO",
+        "PRECO_VENDA",
+        "MARGEM_%",
+        "PRECO_SUGERIDO",
+        "DIFERENCA_R$",
+        "DIFERENCA_%",
+        "STATUS",
+    ]
 
-# =========================
-# SALVAR EXCEL
-# =========================
-with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as writer:
-    df.to_excel(writer, sheet_name="Analise", index=False)
-    resumo.to_frame("Quantidade").to_excel(writer, sheet_name="Resumo")
+    # manter só as que existem
+    colunas_finais = [c for c in colunas_finais if c in df.columns]
+    df = df[colunas_finais].copy()
 
-# =========================
-# PRINT LOG
-# =========================
-print("\n📊 RESUMO:")
-print(f"TOTAL: {total}")
-print(f"COMPETITIVO: {competitivo}")
-print(f"ACIMA: {acima}")
-print(f"ABAIXO: {abaixo}")
-print(f"URGENTE: {urgente}")
+    return df
 
-print("\n✅ Arquivo gerado:", ARQUIVO_SAIDA)
 
-# =========================
-# ENVIO EMAIL
-# =========================
-if EMAIL_ENABLED:
+def salvar_excel(df: pd.DataFrame):
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Analise", index=False)
+
+        resumo = pd.DataFrame({
+            "Indicador": [
+                "TOTAL",
+                "COMPETITIVO",
+                "ACIMA DO MERCADO",
+                "ABAIXO DO MERCADO",
+                "URGENTE",
+            ],
+            "Valor": [
+                len(df),
+                (df["STATUS"] == "COMPETITIVO").sum(),
+                (df["STATUS"] == "ACIMA DO MERCADO").sum(),
+                (df["STATUS"] == "ABAIXO DO MERCADO").sum(),
+                (df["DIFERENCA_%"].abs() > AJUSTE_URGENTE).sum(),
+            ]
+        })
+        resumo.to_excel(writer, sheet_name="Resumo", index=False)
+
+
+def imprimir_resumo(df: pd.DataFrame):
+    total = len(df)
+    competitivo = (df["STATUS"] == "COMPETITIVO").sum()
+    acima = (df["STATUS"] == "ACIMA DO MERCADO").sum()
+    abaixo = (df["STATUS"] == "ABAIXO DO MERCADO").sum()
+    urgente = (df["DIFERENCA_%"].abs() > AJUSTE_URGENTE).sum()
+
+    print("📊 RESUMO:")
+    print(f"TOTAL: {total}")
+    print(f"COMPETITIVO: {competitivo}")
+    print(f"ACIMA: {acima}")
+    print(f"ABAIXO: {abaixo}")
+    print(f"URGENTE: {urgente}")
+    print(f"✅ Arquivo gerado: {ARQUIVO_SAIDA.name}")
+
+
+def executar():
+    df = pd.read_excel(ARQUIVO_ENTRADA)
+    df = preparar_dataframe(df)
+    df = gerar_analise(df)
+    salvar_excel(df)
+    imprimir_resumo(df)
+
+
+# =========================================================
+# EXECUÇÃO
+# =========================================================
+if __name__ == "__main__":
     try:
-        msg = EmailMessage()
-        msg["Subject"] = "Relatório Automático TEC9"
-        msg["From"] = EMAIL_FROM
-        msg["To"] = EMAIL_TO
+        executar()
 
-        corpo = f"""
-RELATÓRIO AUTOMÁTICO TEC9
-
-Total de produtos: {total}
-
-Competitivos: {competitivo}
-Acima do mercado: {acima}
-Abaixo do mercado: {abaixo}
-Ajuste urgente: {urgente}
-"""
-        msg.set_content(corpo)
-
-        with open(ARQUIVO_SAIDA, "rb") as f:
-            msg.add_attachment(
-                f.read(),
-                maintype="application",
-                subtype="octet-stream",
-                filename=ARQUIVO_SAIDA.name
-            )
-
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.send_message(msg)
-
-        print("📧 Email enviado com sucesso!")
+        if MANTER_ATIVO:
+            print(f"🟢 Processo concluído. Mantendo container ativo por {TEMPO_ESPERA_SEGUNDOS} segundos...")
+            while True:
+                time.sleep(TEMPO_ESPERA_SEGUNDOS)
 
     except Exception as e:
-        print("Erro ao enviar email:", e)
+        print(f"❌ {e}")
+        raise
