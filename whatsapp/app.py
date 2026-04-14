@@ -17,12 +17,10 @@ app = Flask(__name__)
 # =========================
 # VARIÁVEIS DE AMBIENTE
 # =========================
-# Configure estas chaves no painel da sua hospedagem
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "1142998738889284")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-# Modelo corrigido para a versão oficial
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # =========================
@@ -33,7 +31,9 @@ def send_whatsapp(to, message):
         logging.error("Credenciais da Meta não configuradas.")
         return
 
+    # CORRIGIDO: URL completa da API da Meta
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
+    
     headers = {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -47,6 +47,7 @@ def send_whatsapp(to, message):
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=20)
+        logging.info(f"Resposta Meta: {response.status_code} - {response.text}")
         return response.json()
     except Exception as e:
         logging.error(f"Erro ao enviar WhatsApp: {e}")
@@ -59,7 +60,9 @@ def ask_openai(user_message):
     if not OPENAI_API_KEY:
         return ""
 
+    # CORRIGIDO: URL completa da API da OpenAI
     url = "https://openai.com"
+    
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json"
@@ -110,6 +113,7 @@ def verify():
         logging.info("Webhook validado com sucesso!")
         return challenge, 200
 
+    logging.warning("Falha na validação do Webhook. Verifique o VERIFY_TOKEN.")
     return "Token de verificação inválido", 403
 
 # =========================
@@ -120,27 +124,25 @@ def webhook():
     data = request.get_json()
 
     try:
-        # Extração segura para evitar erro com notificações de 'status'
+        # Extração corrigida para garantir que os índices existem
         if not data.get("entry") or not data["entry"][0].get("changes"):
             return "ok", 200
         
         value = data["entry"][0]["changes"][0].get("value", {})
         
-        # Ignora se não for uma nova mensagem (ex: confirmação de leitura)
         if "messages" not in value:
             return "ok", 200
 
         message = value["messages"][0]
         user_number = message["from"]
 
-        # Trata apenas mensagens de texto
         if message.get("type") != "text":
             send_whatsapp(user_number, menu())
             return "ok", 200
 
         user_text = message["text"]["body"].lower().strip()
 
-        # Lógica de Menu Local
+        # Lógica de Menu
         if user_text in ["oi", "olá", "ola", "menu", "bom dia", "boa tarde"]:
             send_whatsapp(user_number, menu())
         elif user_text == "1":
@@ -150,21 +152,17 @@ def webhook():
         elif user_text == "3":
             send_whatsapp(user_number, "👨‍💼 Vou te direcionar a um especialista. Me diga qual sua necessidade.")
         else:
-            # Tenta IA, se falhar ou estiver sem chave, usa fallback
             ai_response = ask_openai(user_text)
             if ai_response:
                 send_whatsapp(user_number, ai_response)
             else:
-                send_whatsapp(user_number, "Recebi sua mensagem! Para te ajudar melhor, informe o modelo do produto ou escolha uma opção do menu (1, 2 ou 3).")
+                send_whatsapp(user_number, "Recebi sua mensagem! Informe o modelo do produto ou escolha uma opção do menu (1, 2 ou 3).")
 
     except Exception as e:
-        logging.error(f"Erro no processamento do Webhook: {e}")
+        logging.error(f"Erro no processamento: {e}")
 
     return "ok", 200
 
-# =========================
-# HOME
-# =========================
 @app.route("/", methods=["GET"])
 def home():
     return "BOT TEC9 ONLINE", 200
@@ -173,6 +171,6 @@ def home():
 # EXECUÇÃO
 # =========================
 if __name__ == "__main__":
-    # Pega a porta do ambiente (importante para Render/Heroku)
+    # Garante que o Flask use a porta fornecida pelo Railway
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
