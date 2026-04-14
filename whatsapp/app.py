@@ -1,181 +1,349 @@
 import os
-import re
 import json
+import logging
+from typing import Any, Dict, Optional
+
 import requests
 from flask import Flask, request, jsonify
+
+# =========================
+# CONFIGURAÇÃO DE LOG
+# =========================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
 
 app = Flask(__name__)
 
 # =========================
-# VARIAVEIS DE AMBIENTE
+# VARIÁVEIS DE AMBIENTE
 # =========================
-VERIFY_TOKEN = (os.getenv("VERIFY_TOKEN") or "").strip()
-ACCESS_TOKEN = (os.getenv("META_ACCESS_TOKEN") or "").strip()
-PHONE_NUMBER_ID = (os.getenv("PHONE_NUMBER_ID") or "").strip()
-OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
+VERIFY_TOKEN = os.getenv("EAAK409sUM3YBRFbeMaGZCmqKwvwaRnkQW3ZCpco9zNr0SkfhvYa71LP5mqroU0gn9tS6M5Mx9CO9DTj4idPSysCZA6aKDw3ZBkWlitlzKEAmIOBOI0l2MscoodRn7FLVHlKqW3UjhZCqvA8XIs2iRi23TTL6t5uZC65VD59zf1ePJdT3hwLh3baKm2J9JON0VynQZDZD", "")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# =========================
-# AGENTES
-# =========================
-AGENTE_VENDAS = "Camila"
-AGENTE_SUPORTE = "Lucas"
-AGENTE_ESPECIALISTA = "Ricardo"
+# Modelo opcional da OpenAI
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 # =========================
-# MEMORIA EM RAM
+# VALIDAÇÕES INICIAIS
 # =========================
-memoria_clientes = {}
-
-# =========================
-# PALAVRAS-CHAVE
-# =========================
-PALAVRAS_MENU = ["oi", "olá", "ola", "menu", "inicio", "início", "bom dia", "boa tarde", "boa noite"]
-PALAVRAS_REINICIAR = ["menu", "inicio", "início", "reiniciar", "recomeçar", "voltar", "sair"]
-PALAVRAS_CLIENTE_QUENTE = ["preco", "preço", "valor", "quanto custa", "orcamento", "orçamento", "comprar"]
+if not VERIFY_TOKEN:
+    logging.warning("VERIFY_TOKEN não configurado.")
+if not META_ACCESS_TOKEN:
+    logging.warning("META_ACCESS_TOKEN não configurado.")
+if not PHONE_NUMBER_ID:
+    logging.warning("PHONE_NUMBER_ID não configurado.")
 
 # =========================
-# FUNCOES AUXILIARES
+# MEMÓRIA SIMPLES EM RAM
 # =========================
-def normalizar_texto(texto):
-    return texto.strip().lower() if texto else ""
+# Em produção, o ideal é usar banco.
+user_state: Dict[str, Dict[str, Any]] = {}
 
-def extrair_email(texto):
-    match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto)
-    return match.group(0) if match else None
 
-def extrair_cnpj(texto):
-    match = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', texto)
-    return match.group(0) if match else None
-
-def contem_palavra(texto, palavras):
-    texto_norm = normalizar_texto(texto)
-    return any(p in texto_norm for p in palavras)
-
-def iniciar_memoria(numero):
-    memoria_clientes[numero] = {
-        "setor": None, "etapa": "menu_principal",
-        "dados": {"nome": "", "quantidade": "", "produto": "", "email": "", "cnpj": ""}
-    }
-
-def obter_memoria(numero):
-    if numero not in memoria_clientes: iniciar_memoria(numero)
-    return memoria_clientes[numero]
-
-def limpar_memoria(numero): iniciar_memoria(numero)
-
-def menu_principal():
+# =========================
+# FUNÇÕES AUXILIARES
+# =========================
+def get_menu_text() -> str:
     return (
-        "Olá! Seja bem-vindo(a) à *TEC9 Informática*.\n\n"
+        "Olá! Seja bem-vindo à TEC9 Informática.\n\n"
         "Escolha uma opção:\n"
-        f"1 - *{AGENTE_VENDAS}* | Vendas\n"
-        f"2 - *{AGENTE_SUPORTE}* | Suporte\n"
-        f"3 - *{AGENTE_ESPECIALISTA}* | Especialista\n\n"
-        "Digite o número desejado."
+        "1 - Vendas\n"
+        "2 - Orçamento\n"
+        "3 - Especialista TEC9\n\n"
+        "Se preferir, você também pode digitar diretamente o produto ou modelo que procura."
     )
 
-# =========================
-# OPENAI (CORRIGIDO PARA GPT-4o)
-# =========================
-def chamar_openai_vendas(mensagem_cliente, memoria):
-    if not OPENAI_API_KEY: return None
-    dados = memoria["dados"]
-    prompt_sistema = f"Você é {AGENTE_VENDAS}, vendedora da TEC9. Dados atuais: {dados}. Seja cordial e objetiva."
-    
-    payload = {
-        "model": "gpt-4o", # Alterado de gpt-5 para gpt-4o
-        "messages": [
-            {"role": "system", "content": prompt_sistema},
-            {"role": "user", "content": mensagem_cliente}
-        ],
-        "temperature": 0.7
+
+def normalize_text(text: str) -> str:
+    return (text or "").strip().lower()
+
+
+def send_whatsapp_text(to_number: str, message_text: str) -> Dict[str, Any]:
+    """
+    Envia mensagem de texto via WhatsApp Cloud API.
+    """
+    if not META_ACCESS_TOKEN or not PHONE_NUMBER_ID:
+        raise RuntimeError("META_ACCESS_TOKEN ou PHONE_NUMBER_ID não configurado.")
+
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
     }
-    
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": message_text
+        }
+    }
+
+    logging.info("Enviando mensagem para %s", to_number)
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+
     try:
-        response = requests.post("https://openai.com", headers=headers, json=payload, timeout=30)
-        return response.json()["choices"][0]["message"]["content"].strip()
-    except: return None
+        response_json = response.json()
+    except Exception:
+        response_json = {"raw_response": response.text}
 
-# =========================
-# FLUXOS
-# =========================
-def iniciar_fluxo_vendas(memoria):
-    memoria["setor"] = "vendas"
-    memoria["etapa"] = "aguardando_nome"
-    return f"💰 *{AGENTE_VENDAS}* | Olá! Para começar, qual seu *nome*?"
+    if response.status_code >= 400:
+        logging.error("Erro ao enviar mensagem: %s", response_json)
+        raise RuntimeError(f"Erro Meta API: {response_json}")
 
-def processar_fluxo_vendas(texto, memoria):
-    etapa = memoria["etapa"]
-    if etapa == "aguardando_nome":
-        memoria["dados"]["nome"] = texto
-        memoria["etapa"] = "aguardando_produto"
-        return f"Prazer {texto}! O que você procura hoje?"
-    return "Entendido. Um consultor entrará em contato."
+    logging.info("Mensagem enviada com sucesso: %s", response_json)
+    return response_json
 
-# =========================
-# MOTOR DE CONVERSA
-# =========================
-def processar_mensagem(numero, texto):
-    texto_norm = normalizar_texto(texto)
-    memoria = obter_memoria(numero)
 
-    if texto_norm in PALAVRAS_REINICIAR:
-        limpar_memoria(numero)
-        return menu_principal()
-
-    if memoria["etapa"] == "menu_principal":
-        if texto_norm == "1": return iniciar_fluxo_vendas(memoria)
-        return menu_principal()
-
-    if memoria["setor"] == "vendas": return processar_fluxo_vendas(texto, memoria)
-    return menu_principal()
-
-# =========================
-# ENVIO DE MENSAGEM (URL ATUALIZADA)
-# =========================
-def responder(numero, texto):
-    if not ACCESS_TOKEN or not PHONE_NUMBER_ID: return
-    # Versão v19.0 é a mais recomendada para estabilidade
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product": "whatsapp", "to": numero, "type": "text", "text": {"body": texto}}
-    
+def extract_text_message(data: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """
+    Extrai número e texto da mensagem recebida.
+    Retorna:
+    {
+        "from": "5511999999999",
+        "name": "Nome",
+        "text": "mensagem"
+    }
+    """
     try:
-        requests.post(url, json=payload, headers=headers, timeout=20)
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
+        # Ignora status de entrega/leitura
+        if "messages" not in value:
+            return None
+
+        message = value["messages"][0]
+        contact = value.get("contacts", [{}])[0]
+
+        if message.get("type") != "text":
+            return {
+                "from": message.get("from", ""),
+                "name": contact.get("profile", {}).get("name", "Cliente"),
+                "text": ""
+            }
+
+        return {
+            "from": message.get("from", ""),
+            "name": contact.get("profile", {}).get("name", "Cliente"),
+            "text": message.get("text", {}).get("body", "")
+        }
+
     except Exception as e:
-        print(f"Erro envio: {e}")
+        logging.exception("Erro ao extrair mensagem: %s", e)
+        return None
+
+
+def ask_openai(user_number: str, user_name: str, user_message: str) -> str:
+    """
+    Integração simples com OpenAI usando REST.
+    Se não houver chave, cai no fluxo local/menu.
+    """
+    if not OPENAI_API_KEY:
+        return ""
+
+    system_prompt = (
+        "Você é Iris, atendente da TEC9 Informática no WhatsApp. "
+        "Responda em português do Brasil, com tom profissional, objetivo e cordial. "
+        "Seu papel é ajudar em vendas, orçamento e direcionamento comercial. "
+        "Se o cliente pedir preço, prazo, estoque, entrega ou pagamento, conduza a conversa de forma comercial. "
+        "Se o cliente estiver indeciso, peça produto/modelo, quantidade e cidade/CEP. "
+        "Se a conversa pedir orçamento empresarial, solicite nome da empresa, CNPJ, e-mail e quantidade. "
+        "Evite respostas longas. Não invente estoque nem prazo exato."
+    )
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": OPENAI_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Nome do cliente: {user_name}\n"
+                    f"Número: {user_number}\n"
+                    f"Mensagem: {user_message}"
+                )
+            }
+        ],
+        "temperature": 0.5,
+        "max_tokens": 300
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        result = response.json()
+
+        if response.status_code >= 400:
+            logging.error("Erro OpenAI: %s", result)
+            return ""
+
+        content = result["choices"][0]["message"]["content"].strip()
+        return content
+
+    except Exception as e:
+        logging.exception("Erro ao consultar OpenAI: %s", e)
+        return ""
+
+
+def build_local_response(user_number: str, user_name: str, user_message: str) -> str:
+    """
+    Fluxo local simples caso a OpenAI não esteja configurada.
+    """
+    text = normalize_text(user_message)
+
+    # Primeira interação
+    if user_number not in user_state:
+        user_state[user_number] = {"started": True}
+        if text in {"1", "2", "3"}:
+            pass
+        elif not text:
+            return get_menu_text()
+        elif text in {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite"}:
+            return get_menu_text()
+
+    # Menu
+    if text == "1":
+        return (
+            "Perfeito! Você escolheu *Vendas*.\n\n"
+            "Me informe o produto ou modelo que você procura.\n"
+            "Se quiser, pode enviar também quantidade desejada e sua cidade/CEP."
+        )
+
+    if text == "2":
+        return (
+            "Perfeito! Para *Orçamento*, me envie por favor:\n\n"
+            "• Nome\n"
+            "• Produto ou modelo\n"
+            "• Quantidade\n"
+            "• E-mail\n"
+            "• CNPJ (se for empresa)\n\n"
+            "Assim seguimos com mais agilidade."
+        )
+
+    if text == "3":
+        return (
+            "Claro! Vou te direcionar para um *Especialista TEC9*.\n\n"
+            "Antes, me diga rapidamente qual produto ou necessidade você tem, para agilizar o atendimento."
+        )
+
+    # Palavras de lead quente
+    hot_keywords = [
+        "preço", "preco", "valor", "quanto custa", "prazo",
+        "entrega", "estoque", "pagamento", "pix"
+    ]
+
+    if any(keyword in text for keyword in hot_keywords):
+        return (
+            "Perfeito. Para eu te passar isso com mais precisão, me informe por favor:\n\n"
+            "• Quantidade desejada\n"
+            "• Cidade ou CEP\n"
+            "• Produto ou modelo exato\n\n"
+            "Assim seguimos com agilidade no atendimento."
+        )
+
+    # Saudação
+    if text in {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "menu"}:
+        return get_menu_text()
+
+    # Padrão
+    return (
+        "Recebi sua mensagem. Para eu te ajudar melhor, me envie o produto ou modelo que você procura.\n\n"
+        "Se preferir, digite:\n"
+        "1 - Vendas\n"
+        "2 - Orçamento\n"
+        "3 - Especialista TEC9"
+    )
+
 
 # =========================
-# ROTAS (WEBHOOK)
+# ROTAS
 # =========================
 @app.route("/", methods=["GET"])
-def home(): return "Bot Online", 200
+def home():
+    return "TEC9 BOT ONLINE", 200
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
-        return "Erro de verificacao", 403
 
-    data = request.get_json(silent=True)
+@app.route("/health", methods=["GET"])
+def health():
+    return "OK", 200
+
+
+@app.route("/webhook", methods=["GET"])
+def verify_webhook():
+    """
+    Verificação do webhook pela Meta.
+    """
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    logging.info(
+        "Webhook GET recebido | mode=%s | token_recebido=%s",
+        mode, token
+    )
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        logging.info("Webhook verificado com sucesso.")
+        return challenge, 200
+
+    logging.warning("Falha na verificação do webhook.")
+    return "Forbidden", 403
+
+
+@app.route("/webhook", methods=["POST"])
+def receive_webhook():
+    """
+    Recebe mensagens da Meta.
+    """
     try:
-        if data:
-            for entry in data.get("entry", []):
-                for change in entry.get("changes", []):
-                    value = change.get("value", {})
-                    for msg in value.get("messages", []):
-                        numero = msg.get("from")
-                        if msg.get("type") == "text":
-                            texto = msg.get("text", {}).get("body", "")
-                            resposta = processar_mensagem(numero, texto)
-                            responder(numero, resposta)
-    except: pass
-    return jsonify({"status": "ok"}), 200
+        data = request.get_json(force=True, silent=True) or {}
+        logging.info("Webhook POST recebido: %s", json.dumps(data, ensure_ascii=False))
 
+        msg = extract_text_message(data)
+        if not msg:
+            return jsonify({"status": "ignored"}), 200
+
+        user_number = msg["from"]
+        user_name = msg["name"]
+        user_text = msg["text"]
+
+        # Ignora mensagem vazia ou tipos não texto
+        if not user_number:
+            return jsonify({"status": "ignored_no_number"}), 200
+
+        # Primeiro tenta OpenAI, se existir
+        reply = ask_openai(user_number, user_name, user_text)
+
+        # Se não houver OpenAI ou falhar, usa fluxo local
+        if not reply:
+            reply = build_local_response(user_number, user_name, user_text)
+
+        send_whatsapp_text(user_number, reply)
+
+        return jsonify({"status": "ok"}), 200
+
+    except Exception as e:
+        logging.exception("Erro no webhook POST: %s", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# =========================
+# MAIN
+# =========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.getenv("PORT", "8080"))
+    app.run(host="0.0.0.0", port=port, debug=False)
