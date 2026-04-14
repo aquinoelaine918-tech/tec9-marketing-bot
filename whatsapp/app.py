@@ -22,9 +22,7 @@ app = Flask(__name__)
 VERIFY_TOKEN = os.getenv("tec9token123", "")
 META_ACCESS_TOKEN = os.getenv("EAAK409sUM3YBRFbeMaGZCmqKwvwaRnkQW3ZCpco9zNr0SkfhvYa71LP5mqroU0gn9tS6M5Mx9CO9DTj4idPSysCZA6aKDw3ZBkWlitlzKEAmIOBOI0l2MscoodRn7FLVHlKqW3UjhZCqvA8XIs2iRi23TTL6t5uZC65VD59zf1ePJdT3hwLh3baKm2J9JON0VynQZDZD", "")
 PHONE_NUMBER_ID = os.getenv("1142998738889284", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-
-# Modelo opcional da OpenAI
+OPENAI_API_KEY = os.getenv ("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 # =========================
@@ -40,7 +38,7 @@ if not PHONE_NUMBER_ID:
 # =========================
 # MEMÓRIA SIMPLES EM RAM
 # =========================
-# Em produção, o ideal é usar banco.
+# Para produção avançada, o ideal é usar banco de dados.
 user_state: Dict[str, Dict[str, Any]] = {}
 
 
@@ -124,7 +122,9 @@ def extract_text_message(data: Dict[str, Any]) -> Optional[Dict[str, str]]:
         message = value["messages"][0]
         contact = value.get("contacts", [{}])[0]
 
-        if message.get("type") != "text":
+        msg_type = message.get("type")
+
+        if msg_type != "text":
             return {
                 "from": message.get("from", ""),
                 "name": contact.get("profile", {}).get("name", "Cliente"),
@@ -144,20 +144,21 @@ def extract_text_message(data: Dict[str, Any]) -> Optional[Dict[str, str]]:
 
 def ask_openai(user_number: str, user_name: str, user_message: str) -> str:
     """
-    Integração simples com OpenAI usando REST.
-    Se não houver chave, cai no fluxo local/menu.
+    Integração simples com OpenAI via REST.
+    Se não houver chave, retorna string vazia.
     """
     if not OPENAI_API_KEY:
         return ""
 
     system_prompt = (
-        "Você é Iris, atendente da TEC9 Informática no WhatsApp. "
+        "Você é Iris, atendente comercial da TEC9 Informática no WhatsApp. "
         "Responda em português do Brasil, com tom profissional, objetivo e cordial. "
         "Seu papel é ajudar em vendas, orçamento e direcionamento comercial. "
         "Se o cliente pedir preço, prazo, estoque, entrega ou pagamento, conduza a conversa de forma comercial. "
-        "Se o cliente estiver indeciso, peça produto/modelo, quantidade e cidade/CEP. "
         "Se a conversa pedir orçamento empresarial, solicite nome da empresa, CNPJ, e-mail e quantidade. "
-        "Evite respostas longas. Não invente estoque nem prazo exato."
+        "Se o cliente estiver indeciso, peça produto/modelo, quantidade e cidade/CEP. "
+        "Evite respostas longas. Não invente estoque nem prazo exato. "
+        "Sempre mantenha um tom de atendimento comercial profissional."
     )
 
     url = "https://api.openai.com/v1/chat/completions"
@@ -208,11 +209,7 @@ def build_local_response(user_number: str, user_name: str, user_message: str) ->
     # Primeira interação
     if user_number not in user_state:
         user_state[user_number] = {"started": True}
-        if text in {"1", "2", "3"}:
-            pass
-        elif not text:
-            return get_menu_text()
-        elif text in {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite"}:
+        if text in {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", ""}:
             return get_menu_text()
 
     # Menu
@@ -220,7 +217,7 @@ def build_local_response(user_number: str, user_name: str, user_message: str) ->
         return (
             "Perfeito! Você escolheu *Vendas*.\n\n"
             "Me informe o produto ou modelo que você procura.\n"
-            "Se quiser, pode enviar também quantidade desejada e sua cidade/CEP."
+            "Se quiser, pode enviar também a quantidade desejada e sua cidade ou CEP."
         )
 
     if text == "2":
@@ -237,10 +234,10 @@ def build_local_response(user_number: str, user_name: str, user_message: str) ->
     if text == "3":
         return (
             "Claro! Vou te direcionar para um *Especialista TEC9*.\n\n"
-            "Antes, me diga rapidamente qual produto ou necessidade você tem, para agilizar o atendimento."
+            "Antes, me diga rapidamente qual produto ou necessidade você tem para agilizar o atendimento."
         )
 
-    # Palavras de lead quente
+    # Lead quente
     hot_keywords = [
         "preço", "preco", "valor", "quanto custa", "prazo",
         "entrega", "estoque", "pagamento", "pix"
@@ -249,17 +246,17 @@ def build_local_response(user_number: str, user_name: str, user_message: str) ->
     if any(keyword in text for keyword in hot_keywords):
         return (
             "Perfeito. Para eu te passar isso com mais precisão, me informe por favor:\n\n"
+            "• Produto ou modelo exato\n"
             "• Quantidade desejada\n"
-            "• Cidade ou CEP\n"
-            "• Produto ou modelo exato\n\n"
+            "• Cidade ou CEP\n\n"
             "Assim seguimos com agilidade no atendimento."
         )
 
-    # Saudação
+    # Saudação/menu
     if text in {"oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "menu"}:
         return get_menu_text()
 
-    # Padrão
+    # Resposta padrão
     return (
         "Recebi sua mensagem. Para eu te ajudar melhor, me envie o produto ou modelo que você procura.\n\n"
         "Se preferir, digite:\n"
@@ -297,43 +294,58 @@ def verify_webhook():
     )
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        logging.info("Webhook verificado com sucesso.")
+        logging.info("Webhook verificado com sucesso!")
         return challenge, 200
 
-    logging.warning("Falha na verificação do webhook.")
-    return "Forbidden", 403
+    logging.warning("Token de verificação inválido.")
+    return "Token de verificação inválido", 403
 
 
 @app.route("/webhook", methods=["POST"])
-def receive_webhook():
+def webhook_receiver():
     """
-    Recebe mensagens da Meta.
+    Recebe mensagens da Meta e responde no WhatsApp.
     """
     try:
         data = request.get_json(force=True, silent=True) or {}
         logging.info("Webhook POST recebido: %s", json.dumps(data, ensure_ascii=False))
 
-        msg = extract_text_message(data)
-        if not msg:
+        msg_data = extract_text_message(data)
+
+        if not msg_data:
+            logging.info("Evento ignorado: sem mensagem processável.")
             return jsonify({"status": "ignored"}), 200
 
-        user_number = msg["from"]
-        user_name = msg["name"]
-        user_text = msg["text"]
+        user_number = msg_data.get("from", "")
+        user_name = msg_data.get("name", "Cliente")
+        user_text = msg_data.get("text", "")
 
-        # Ignora mensagem vazia ou tipos não texto
         if not user_number:
+            logging.warning("Evento sem número do remetente.")
             return jsonify({"status": "ignored_no_number"}), 200
 
-        # Primeiro tenta OpenAI, se existir
-        reply = ask_openai(user_number, user_name, user_text)
+        logging.info(
+            "Mensagem recebida | de=%s | nome=%s | texto=%s",
+            user_number, user_name, user_text
+        )
 
-        # Se não houver OpenAI ou falhar, usa fluxo local
-        if not reply:
-            reply = build_local_response(user_number, user_name, user_text)
+        # Tenta OpenAI primeiro
+        reply_text = ""
+        if OPENAI_API_KEY:
+            try:
+                reply_text = ask_openai(user_number, user_name, user_text)
+            except Exception as e:
+                logging.exception("Erro ao consultar OpenAI: %s", e)
+                reply_text = ""
 
-        send_whatsapp_text(user_number, reply)
+        # Se não houver resposta da OpenAI, usa fluxo local
+        if not reply_text:
+            reply_text = build_local_response(user_number, user_name, user_text)
 
+        # Envia resposta
+        send_result = send_whatsapp_text(user_number, reply_text)
+
+        logging.info("Resposta enviada com sucesso: %s", send_result)
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
