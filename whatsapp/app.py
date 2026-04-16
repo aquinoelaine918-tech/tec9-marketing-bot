@@ -1,39 +1,25 @@
+import os
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({
-        "status": "online",
-        "message": "TEC9 BOT ONLINE"
-    }), 200
+    return "OK", 200
 
 @app.route("/health", methods=["GET"])
 def health():
     return "OK", 200
 
 @app.route("/webhook", methods=["GET"])
-def webhook_verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    return jsonify({
-        "mode": mode,
-        "token": token,
-        "challenge": challenge,
-        "status": "webhook get ok"
-    }), 200
+def verify():
+    return "WEBHOOK OK", 200
 
 @app.route("/webhook", methods=["POST"])
-def webhook_receive():
-    data = request.get_json(silent=True)
-
-    print("POST recebido no webhook:")
-    print(data)
-
+def receive():
     return "ok", 200
 
+# ESSENCIAL PARA RAILWAY
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
