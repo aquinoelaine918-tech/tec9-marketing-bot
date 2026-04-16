@@ -1,108 +1,139 @@
 import os
-import requests
+import json
+import traceback
 from flask import Flask, request, jsonify
-from openai import OpenAI
+import requests
 
 app = Flask(__name__)
 
-# ===== CONFIG =====
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
-META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+TEST_TO_NUMBER = os.getenv("TEST_TO_NUMBER", "5511952686414")
+TEST_TEMPLATE_NAME = os.getenv("TEST_TEMPLATE_NAME", "teste_tec9")
+TEST_TEMPLATE_LANG = os.getenv("TEST_TEMPLATE_LANG", "pt_BR")
+
+
+def meta_headers():
+    return {
+        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+
+def safe_json_or_text(response_text: str):
+    try:
+        return json.loads(response_text)
+    except Exception:
+        return response_text
+
+
+def send_template_message(to_number: str):
+    if not META_ACCESS_TOKEN:
+        raise ValueError("META_ACCESS_TOKEN não configurado.")
+    if not PHONE_NUMBER_ID:
+        raise ValueError("PHONE_NUMBER_ID não configurado.")
+    if not to_number:
+        raise ValueError("Número de destino não informado.")
+
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "template",
+        "template": {
+            "name": TEST_TEMPLATE_NAME,
+            "language": {
+                "code": TEST_TEMPLATE_LANG
+            }
+        }
+    }
+
+    response = requests.post(url, headers=meta_headers(), json=payload, timeout=30)
+    return response.status_code, response.text
+
 
 @app.route("/", methods=["GET"])
 def home():
     return "TEC9 BOT ONLINE 🚀", 200
 
-# ===== VERIFICAÇÃO DO WEBHOOK =====
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "ok",
+        "verify_token_configurado": bool(VERIFY_TOKEN),
+        "meta_access_token_configurado": bool(META_ACCESS_TOKEN),
+        "phone_number_id_configurado": bool(PHONE_NUMBER_ID),
+        "phone_number_id": PHONE_NUMBER_ID,
+        "test_template_name": TEST_TEMPLATE_NAME,
+        "test_template_lang": TEST_TEMPLATE_LANG,
+        "test_to_number": TEST_TO_NUMBER
+    }), 200
+
+
+@app.route("/send", methods=["GET"])
+def send_test():
+    try:
+        to_number = request.args.get("to", TEST_TO_NUMBER).strip()
+        status_code, response_text = send_template_message(to_number)
+
+        return jsonify({
+            "ok": 200 <= status_code < 300,
+            "sent_to": to_number,
+            "status_code": status_code,
+            "response": safe_json_or_text(response_text)
+        }), status_code
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route("/webhook", methods=["GET"])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
+def verify_webhook():
+    try:
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
-    return "Erro de verificação", 403
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            return challenge, 200
 
-# ===== RECEBER MENSAGEM =====
+        return "Token de verificação inválido", 403
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-
-    # O WhatsApp envia notificações de status (enviado, lido); ignoramos para evitar loops
-    if not data or "entry" not in data:
-        return jsonify({"status": "no data"}), 404
-
+def receive_webhook():
     try:
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
+        data = request.get_json(silent=True) or {}
 
-        if "messages" in value:
-            message = value["messages"][0]
-            from_number = message["from"]
-            
-            # Verifica se a mensagem tem texto (evita erro com imagens/áudios por enquanto)
-            if "text" in message:
-                text = message["text"]["body"]
-                print(f"Mensagem de {from_number}: {text}")
+        print("WEBHOOK RECEBIDO:")
+        print(json.dumps(data, ensure_ascii=False, indent=2))
 
-                resposta = gerar_resposta(text)
-                enviar_mensagem(from_number, resposta)
-            else:
-                print("Mensagem recebida não contém texto.")
+        return jsonify({"status": "received"}), 200
 
     except Exception as e:
-        print(f"Erro no processamento: {e}")
+        print("ERRO NO WEBHOOK:")
+        print(traceback.format_exc())
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
 
-    return jsonify({"status": "ok"}), 200
-
-# ===== IA =====
-def gerar_resposta(pergunta):
-    try:
-        # Ajustado de 'gpt-4.1-mini' (inexistente) para 'gpt-4o-mini'
-        resposta = client.chat.completions.create(
-            model="gpt-4o-mini", 
-            messages=[
-                {"role": "system", "content": "Você é um vendedor especialista da TEC9 informática. Seja profissional, objetivo e ajude a vender."},
-                {"role": "user", "content": pergunta}
-            ]
-        )
-        return resposta.choices[0].message.content
-    except Exception as e:
-        print(f"Erro OpenAI: {e}")
-        return "Desculpe, tive um problema técnico. Pode repetir a sua dúvida?"
-
-# ===== ENVIO WHATSAPP =====
-def enviar_mensagem(numero, texto):
-    # Versão da API Meta atualizada para v21.0 (ou use a que preferir)
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": numero,
-        "type": "text",
-        "text": {"body": texto}
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status() # Lança erro se o status for 4xx ou 5xx
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Erro ao enviar WhatsApp: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=True)
-
