@@ -1,9 +1,11 @@
 import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request
+
+app = Flask(__name__)
 
 # ==============================
-# CONFIGURAÇÕES
+# VARIÁVEIS
 # ==============================
 
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
@@ -11,10 +13,8 @@ META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-app = Flask(__name__)
-
 # ==============================
-# ROTA TESTE
+# ROTAS DE TESTE (IMPORTANTES)
 # ==============================
 
 @app.route("/", methods=["GET"])
@@ -26,11 +26,11 @@ def health():
     return "OK", 200
 
 # ==============================
-# VERIFICAÇÃO WEBHOOK (META)
+# WEBHOOK VERIFICATION
 # ==============================
 
 @app.route("/webhook", methods=["GET"])
-def verify_webhook():
+def verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
@@ -38,41 +38,43 @@ def verify_webhook():
     if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
 
-    return "Erro de verificação", 403
+    return "Erro", 403
 
 # ==============================
-# RECEBER MENSAGEM WHATSAPP
+# RECEBER MENSAGEM
 # ==============================
 
 @app.route("/webhook", methods=["POST"])
-def receber_mensagem():
+def webhook():
     data = request.get_json()
 
     try:
-        if "entry" in data:
+        if data.get("entry"):
             for entry in data["entry"]:
                 for change in entry["changes"]:
-                    if "value" in change and "messages" in change["value"]:
-                        mensagem = change["value"]["messages"][0]
-                        numero = mensagem["from"]
+                    value = change.get("value", {})
 
-                        # evita loop de mensagens da própria API
-                        if mensagem.get("id"):
-                            texto = mensagem["text"]["body"]
+                    if "messages" in value:
+                        msg = value["messages"][0]
+                        numero = msg["from"]
+
+                        # evita loop
+                        if msg.get("text"):
+                            texto = msg["text"]["body"]
 
                             resposta = gerar_resposta(texto)
                             enviar_mensagem(numero, resposta)
 
     except Exception as e:
-        print("Erro ao processar mensagem:", e)
+        print("ERRO:", e)
 
     return "ok", 200
 
 # ==============================
-# GERAR RESPOSTA COM OPENAI
+# OPENAI
 # ==============================
 
-def gerar_resposta(texto_usuario):
+def gerar_resposta(texto):
     try:
         url = "https://api.openai.com/v1/chat/completions"
 
@@ -81,55 +83,57 @@ def gerar_resposta(texto_usuario):
             "Content-Type": "application/json"
         }
 
-        data = {
+        body = {
             "model": "gpt-4o-mini",
             "messages": [
-                {"role": "system", "content": "Você é um vendedor profissional da TEC9 Informática."},
-                {"role": "user", "content": texto_usuario}
+                {"role": "system", "content": "Você é um vendedor da TEC9 Informática."},
+                {"role": "user", "content": texto}
             ]
         }
 
-        response = requests.post(url, headers=headers, json=data)
+        r = requests.post(url, headers=headers, json=body)
 
-        if response.status_code == 200:
-            resposta = response.json()
-            return resposta["choices"][0]["message"]["content"]
-        else:
-            print("Erro OpenAI:", response.text)
-            return "Desculpe, ocorreu um erro ao gerar resposta."
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+
+        print("Erro OpenAI:", r.text)
+        return "Erro ao gerar resposta."
 
     except Exception as e:
-        print("Erro OpenAI Exception:", e)
-        return "Erro interno ao processar mensagem."
+        print("Erro OpenAI:", e)
+        return "Erro interno."
 
 # ==============================
-# ENVIAR MENSAGEM WHATSAPP
+# ENVIO WHATSAPP
 # ==============================
 
 def enviar_mensagem(numero, mensagem):
-    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    try:
+        url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
 
-    headers = {
-        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
+        headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {"body": mensagem}
-    }
+        body = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "text",
+            "text": {"body": mensagem}
+        }
 
-    response = requests.post(url, headers=headers, json=payload)
+        r = requests.post(url, headers=headers, json=body)
 
-    print("STATUS:", response.status_code)
-    print("RESPOSTA:", response.text)
+        print("ENVIO:", r.status_code, r.text)
+
+    except Exception as e:
+        print("Erro envio:", e)
 
 # ==============================
-# INICIALIZAÇÃO (RAILWAY)
+# START (OBRIGATÓRIO RAILWAY)
 # ==============================
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
