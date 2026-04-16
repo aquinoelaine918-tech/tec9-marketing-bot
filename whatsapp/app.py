@@ -1,122 +1,87 @@
-import os
-import json
-import traceback
 from flask import Flask, request, jsonify
 import requests
+import os
 
 app = Flask(__name__)
 
-# ========================
-# VARIÁVEIS DE AMBIENTE
-# ========================
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
-META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-TEST_TO_NUMBER = os.getenv("TEST_TO_NUMBER", "5511952686414")
-TEST_TEMPLATE_NAME = os.getenv("TEST_TEMPLATE_NAME", "teste_tec9")
-TEST_TEMPLATE_LANG = os.getenv("TEST_TEMPLATE_LANG", "pt_BR")
+# =========================
+# ROTAS DE TESTE
+# =========================
 
-
-# ========================
-# FUNÇÕES AUXILIARES
-# ========================
-def headers():
-    return {
-        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-
-def send_template(to):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "template",
-        "template": {
-            "name": TEST_TEMPLATE_NAME,
-            "language": {
-                "code": TEST_TEMPLATE_LANG
-            }
-        }
-    }
-
-    response = requests.post(url, headers=headers(), json=payload)
-
-    return response.status_code, response.text
-
-
-# ========================
-# ROTAS
-# ========================
-
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
     return "TEC9 BOT ONLINE 🚀", 200
 
-
-@app.route("/health", methods=["GET"])
+@app.route("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "meta_access_token": bool(META_ACCESS_TOKEN),
-        "phone_number_id": PHONE_NUMBER_ID,
-        "template": TEST_TEMPLATE_NAME,
-        "numero_teste": TEST_TO_NUMBER
-    })
+    return "OK", 200
 
-
-@app.route("/send", methods=["GET"])
-def send():
-    try:
-        numero = request.args.get("to", TEST_TO_NUMBER)
-
-        status, resposta = send_template(numero)
-
-        return jsonify({
-            "status_code": status,
-            "response": resposta
-        })
-
-    except Exception as e:
-        return jsonify({
-            "erro": str(e),
-            "trace": traceback.format_exc()
-        }), 500
-
-
-# ========================
-# WEBHOOK META
-# ========================
+# =========================
+# VERIFICAÇÃO WEBHOOK
+# =========================
 
 @app.route("/webhook", methods=["GET"])
-def verify():
+def verify_webhook():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
-
     return "Erro de verificação", 403
 
+# =========================
+# RECEBER MENSAGENS
+# =========================
 
 @app.route("/webhook", methods=["POST"])
-def receive():
+def webhook():
     data = request.get_json()
 
-    print("Mensagem recebida:")
-    print(json.dumps(data, indent=2, ensure_ascii=False))
+    try:
+        message = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        number = message["from"]
+        text = message["text"]["body"]
 
-    return "ok", 200
+        print("Mensagem recebida:", text)
 
+        enviar_mensagem(number, f"Recebi: {text}")
 
-# ========================
-# EXECUÇÃO
-# ========================
+    except Exception as e:
+        print("Erro:", e)
+
+    return "OK", 200
+
+# =========================
+# ENVIAR MENSAGEM
+# =========================
+
+def enviar_mensagem(numero, mensagem):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": mensagem
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    print("Resposta envio:", response.text)
+
+# =========================
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
