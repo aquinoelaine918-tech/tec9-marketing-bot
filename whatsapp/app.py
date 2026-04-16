@@ -103,7 +103,6 @@ def enviar_mensagem(numero, texto):
         print(f"Erro ao enviar WhatsApp: {e}")
 
 if __name__ == "__main__":
-    # O Railway exige que a porta venha da variável de ambiente
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, debug=True)
 
