@@ -5,21 +5,14 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# ==========================================
-# CONFIGURAÇÕES (VARIÁVEIS DE AMBIENTE)
-# ==========================================
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "123456")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# ==========================================
-# ROTAS DE TESTE E SAÚDE
-# ==========================================
 @app.route("/", methods=["GET"])
 def home():
     return "TEC9 BOT ONLINE 🚀", 200
-
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -30,10 +23,6 @@ def health():
         "phone_number_id": "configurado" if PHONE_NUMBER_ID else "pendente"
     }), 200
 
-
-# ==========================================
-# WEBHOOK: VERIFICAÇÃO (META)
-# ==========================================
 @app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
@@ -46,10 +35,6 @@ def verify():
 
     return "Erro de verificação", 403
 
-
-# ==========================================
-# WEBHOOK: RECEBER MENSAGENS
-# ==========================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True)
@@ -79,7 +64,6 @@ def webhook():
             if not from_number:
                 return "EVENT_RECEIVED", 200
 
-            # Evita processar tipos que não sejam texto
             if message.get("type") == "text" and "text" in message:
                 user_text = message["text"].get("body", "").strip()
 
@@ -88,10 +72,7 @@ def webhook():
 
                 print(f"Mensagem de {from_number}: {user_text}")
 
-                # 1. Gera a resposta com IA
                 resposta_ia = gerar_resposta(user_text)
-
-                # 2. Envia resposta ao WhatsApp
                 envio_ok = enviar_mensagem(from_number, resposta_ia)
 
                 if envio_ok:
@@ -104,10 +85,6 @@ def webhook():
 
     return "EVENT_RECEIVED", 200
 
-
-# ==========================================
-# FUNÇÃO: RESPOSTA IA (OPENAI)
-# ==========================================
 def gerar_resposta(pergunta: str) -> str:
     try:
         if not OPENAI_API_KEY:
@@ -149,10 +126,6 @@ def gerar_resposta(pergunta: str) -> str:
             "Me diga qual produto você procura."
         )
 
-
-# ==========================================
-# FUNÇÃO: ENVIO DE MENSAGEM (META API)
-# ==========================================
 def enviar_mensagem(numero: str, texto: str) -> bool:
     try:
         if not META_ACCESS_TOKEN:
@@ -192,10 +165,6 @@ def enviar_mensagem(numero: str, texto: str) -> bool:
         print(f"Erro ao enviar para WhatsApp: {e}")
         return False
 
-
-# ==========================================
-# INICIALIZAÇÃO DO SERVIDOR
-# ==========================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
