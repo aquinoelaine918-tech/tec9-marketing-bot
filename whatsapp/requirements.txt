@@ -1,4 +1,7 @@
 flask
 requests
-openai
 gunicorn
+python-dotenv
+openai
+pandas
+openpyxl
