@@ -1,114 +1,40 @@
 import os
 import json
 import traceback
-import requests
 from flask import Flask, request, jsonify
+import requests
 
 app = Flask(__name__)
 
-# ===== VARIÁVEIS =====
+# ========================
+# VARIÁVEIS DE AMBIENTE
+# ========================
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# ===== CONFIG TESTE TEMPLATE =====
 TEST_TO_NUMBER = os.getenv("TEST_TO_NUMBER", "5511952686414")
-TEST_TEMPLATE_NAME = os.getenv("TEST_TEMPLATE_NAME", "hello_world")
+TEST_TEMPLATE_NAME = os.getenv("TEST_TEMPLATE_NAME", "teste_tec9")
 TEST_TEMPLATE_LANG = os.getenv("TEST_TEMPLATE_LANG", "pt_BR")
 
-# ===== HEADERS =====
-def meta_headers():
+
+# ========================
+# FUNÇÕES AUXILIARES
+# ========================
+def headers():
     return {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
 
-# ===== HOME =====
-@app.route("/", methods=["GET"])
-def home():
-    return "TEC9 BOT ONLINE 🚀"
 
-# ===== HEALTH =====
-@app.route("/health", methods=["GET"])
-def health():
-    return "OK"
-
-# ===== VERIFICAÇÃO WEBHOOK =====
-@app.route("/webhook", methods=["GET"])
-def verify():
-    try:
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
-        return "Erro de verificação", 403
-
-    except Exception as e:
-        print("Erro verify:", e)
-        return "Erro", 500
-
-# ===== RECEBER MENSAGEM =====
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-
-    try:
-        print("Payload recebido:", json.dumps(data, indent=2))
-
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
-
-        if "messages" in value:
-            message = value["messages"][0]
-            numero = message["from"]
-
-            if "text" in message:
-                texto = message["text"]["body"]
-            else:
-                texto = "Mensagem não suportada"
-
-            print(f"Mensagem de {numero}: {texto}")
-
-            resposta = gerar_resposta(texto)
-            enviar_texto(numero, resposta)
-
-    except Exception as e:
-        print("Erro webhook:")
-        traceback.print_exc()
-
-    return "ok", 200
-
-# ===== IA (RESPOSTA SIMPLES POR ENQUANTO) =====
-def gerar_resposta(texto):
-    return f"Recebi sua mensagem: {texto}\n\nEquipe TEC9 já vai te atender 😉"
-
-# ===== ENVIO TEXTO =====
-def enviar_texto(numero, texto):
-    url = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
+def send_template(to):
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
 
     payload = {
         "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {
-            "body": texto
-        }
-    }
-
-    response = requests.post(url, headers=meta_headers(), json=payload)
-    print("Envio texto:", response.status_code, response.text)
-
-# ===== ENVIO TEMPLATE TESTE =====
-@app.route("/teste", methods=["GET"])
-def teste_template():
-    url = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": TEST_TO_NUMBER,
+        "to": to,
         "type": "template",
         "template": {
             "name": TEST_TEMPLATE_NAME,
@@ -118,13 +44,79 @@ def teste_template():
         }
     }
 
-    response = requests.post(url, headers=meta_headers(), json=payload)
+    response = requests.post(url, headers=headers(), json=payload)
 
+    return response.status_code, response.text
+
+
+# ========================
+# ROTAS
+# ========================
+
+@app.route("/", methods=["GET"])
+def home():
+    return "TEC9 BOT ONLINE 🚀", 200
+
+
+@app.route("/health", methods=["GET"])
+def health():
     return jsonify({
-        "status": response.status_code,
-        "resposta": response.text
+        "status": "ok",
+        "meta_access_token": bool(META_ACCESS_TOKEN),
+        "phone_number_id": PHONE_NUMBER_ID,
+        "template": TEST_TEMPLATE_NAME,
+        "numero_teste": TEST_TO_NUMBER
     })
 
-# ===== RODAR =====
+
+@app.route("/send", methods=["GET"])
+def send():
+    try:
+        numero = request.args.get("to", TEST_TO_NUMBER)
+
+        status, resposta = send_template(numero)
+
+        return jsonify({
+            "status_code": status,
+            "response": resposta
+        })
+
+    except Exception as e:
+        return jsonify({
+            "erro": str(e),
+            "trace": traceback.format_exc()
+        }), 500
+
+
+# ========================
+# WEBHOOK META
+# ========================
+
+@app.route("/webhook", methods=["GET"])
+def verify():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+
+    return "Erro de verificação", 403
+
+
+@app.route("/webhook", methods=["POST"])
+def receive():
+    data = request.get_json()
+
+    print("Mensagem recebida:")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+    return "ok", 200
+
+
+# ========================
+# EXECUÇÃO
+# ========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
