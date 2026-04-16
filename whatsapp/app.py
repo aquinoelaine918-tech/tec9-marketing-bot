@@ -103,5 +103,7 @@ def enviar_mensagem(numero, texto):
         print(f"Erro ao enviar WhatsApp: {e}")
 
 if __name__ == "__main__":
-    # Use 0.0.0.0 apenas para deploy. Para teste local, use 127.0.0.1
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    # O Railway exige que a porta venha da variável de ambiente
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
