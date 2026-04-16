@@ -7,7 +7,7 @@ app = Flask(__name__)
 def home():
     return jsonify({
         "status": "ok",
-        "message": "TEC9 BOT ONLINE"
+        "message": "TEC9 BOT ONLINE 🚀"
     }), 200
 
 @app.route("/health", methods=["GET"])
