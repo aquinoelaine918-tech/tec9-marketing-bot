@@ -1,25 +1,22 @@
 import requests
+import os
 
-# =========================================
-# CONFIGURAÇÕES (AJUSTE AQUI)
-# =========================================
+# ===== CONFIG =====
+ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-ACCESS_TOKEN = "SEU_TOKEN_AQUI"  # <-- COLE O TOKEN NOVO AQUI
-PHONE_NUMBER_ID = "1099079283287430"  # já está correto
-TO_NUMBER = "5511952686414"  # número que vai receber
+# Número destino (com DDI e DDD, sem espaços)
+TO_NUMBER = "5511952686414"
 
-# =========================================
-# ENVIO DA MENSAGEM
-# =========================================
-
-url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+# ===== ENVIO =====
+url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
 
 headers = {
     "Authorization": f"Bearer {ACCESS_TOKEN}",
     "Content-Type": "application/json"
 }
 
-data = {
+payload = {
     "messaging_product": "whatsapp",
     "to": TO_NUMBER,
     "type": "template",
@@ -31,16 +28,7 @@ data = {
     }
 }
 
-# =========================================
-# REQUISIÇÃO
-# =========================================
+response = requests.post(url, headers=headers, json=payload)
 
-response = requests.post(url, headers=headers, json=data)
-
-# =========================================
-# RESULTADO
-# =========================================
-
-print("Status Code:", response.status_code)
-print("Resposta da API:")
-print(response.json())
+print("STATUS:", response.status_code)
+print("RESPOSTA:", response.text)
