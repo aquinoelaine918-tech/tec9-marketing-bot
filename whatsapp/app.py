@@ -4,11 +4,10 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = "tec9token123"  # mesmo token do Meta
+VERIFY_TOKEN = "tec9token123"
 WHATSAPP_TOKEN = "EAAK409sUM3YBRNCccW6ajBxCsWtW9A7qMZA2bWBqBP7Bl0aQkAiTZBwI43ZC4x1hhdej6aMVdedDlgX0amegPsUiIyOMIp6bxEZC4dDQzeahyRWcBGZCwHlMRmzEbd7ylSHbUTVoZCpExxLvd5coDBIyJWGOZCIVZAFfuBTSksJ8Y7OIEUxlNBlKH19XzQhz2GwDnuKIGvHPYltnLSQYQ1feITnUxjefZBuZCIkYRjEsG19Y0ZBy5ORQ2w2NKnHx6zlY4MFyLA5AOssVeHoUkOfz7mOqQZDZD"
 PHONE_NUMBER_ID = "1099079283287430"
 
-# 🔹 HOME
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -16,38 +15,39 @@ def home():
         "message": "TEC9 BOT ONLINE 🚀"
     }), 200
 
-# 🔹 VERIFICAÇÃO DO WEBHOOK
+# 🔹 VERIFICAÇÃO
 @app.route("/webhook", methods=["GET"])
-def verify_webhook():
-    mode = request.args.get("hub.mode")
+def verify():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
-    else:
-        return "Erro de verificação", 403
+    if token == VERIFY_TOKEN:
+        return challenge
+    return "Erro", 403
 
-# 🔹 RECEBER MENSAGEM
+# 🔹 RECEBER E RESPONDER
 @app.route("/webhook", methods=["POST"])
-def receive_message():
+def webhook():
     data = request.get_json()
     print("Evento recebido:", data)
 
     try:
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
+        if "entry" in data:
+            for entry in data["entry"]:
+                for change in entry["changes"]:
+                    value = change["value"]
 
-        if "messages" in value:
-            message = value["messages"][0]
-            from_number = message["from"]
-            text = message["text"]["body"]
+                    if "messages" in value:
+                        message = value["messages"][0]
+                        from_number = message["from"]
 
-            print("Mensagem:", text)
+                        if message["type"] == "text":
+                            text = message["text"]["body"]
 
-            # 🔥 resposta automática
-            send_message(from_number, f"Recebi sua mensagem: {text}")
+                            print("Mensagem:", text)
+
+                            resposta = f"Olá! Você disse: {text}"
+                            send_message(from_number, resposta)
 
     except Exception as e:
         print("Erro:", e)
@@ -63,7 +63,7 @@ def send_message(to, message):
         "Content-Type": "application/json"
     }
 
-    data = {
+    payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "text",
@@ -72,10 +72,9 @@ def send_message(to, message):
         }
     }
 
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=payload)
     print("Resposta envio:", response.text)
 
-# 🔹 START
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
