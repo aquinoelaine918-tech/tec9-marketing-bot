@@ -13,7 +13,6 @@ REMETENTE_NOME = "TEC9 Informática"
 EMAIL_RELATORIO = (os.getenv("EMAIL_RELATORIO") or "comercial@tec9informatica.com.br").strip()
 
 # ID do modelo que você criou na aba "Modelos" da Brevo
-# Se o ID for diferente de 5, mude o número abaixo:
 ID_MODELO_BREVO = 5 
 
 ARQUIVOS_CLIENTES_POSSIVEIS = [
@@ -24,6 +23,8 @@ ARQUIVOS_CLIENTES_POSSIVEIS = [
 
 ARQUIVO_HISTORICO = "historico_envios.csv"
 LIMITE_DIARIO = 300
+
+# URL CORRIGIDA PARA A API V3
 URL_ENVIO_BREVO = "https://brevo.com"
 
 # ================= FUNÇÕES =================
@@ -77,7 +78,7 @@ def enviar_email(email):
         "content-type": "application/json"
     }
     
-    # Aqui é onde a mágica acontece: chamamos o templateId em vez de mandar texto puro
+    # Chama o templateId para usar o design da Brevo com anexo
     payload = {
         "sender": {"name": REMETENTE_NOME, "email": REMETENTE_EMAIL},
         "to": [{"email": email}],
@@ -103,7 +104,7 @@ def salvar_historico_unico(email):
 
 def enviar_relatorio(enviados):
     headers = {"accept": "application/json", "api-key": API_KEY, "content-type": "application/json"}
-    html = f"<h2>📊 Relatório TEC9</h2><p>E-mails enviados com sucesso hoje: <b>{enviados}</b> usando o modelo {ID_MODELO_BREVO}.</p>"
+    html = f"<h2>📊 Relatório TEC9</h2><p>E-mails enviados hoje: <b>{enviados}</b> usando o modelo {ID_MODELO_BREVO}.</p>"
     payload = {
         "sender": {"name": REMETENTE_NOME, "email": REMETENTE_EMAIL},
         "to": [{"email": EMAIL_RELATORIO}],
@@ -123,7 +124,7 @@ def main():
         lista_envio = filtrar_clientes(clientes, historico)
 
         if len(lista_envio) == 0:
-            print("ℹ️ Nenhum contato novo para enviar na lista filtrada.")
+            print("ℹ️ Nenhum contato novo para enviar hoje (filtro de 7 dias ativo).")
             return
 
         enviados = 0
@@ -138,11 +139,11 @@ def main():
             else:
                 print(f"❌ ERRO no e-mail {email}: Status {status} - {retorno}")
 
-            time.sleep(2) # Pausa de 2 segundos para evitar bloqueios de spam
+            time.sleep(2) # Pausa para evitar bloqueios de spam
 
         if enviados > 0:
             enviar_relatorio(enviados)
-        print(f"📊 FINALIZADO. Total de envios: {enviados}")
+        print(f"📊 FINALIZADO. Total de envios realizados: {enviados}")
 
     except Exception as e:
         print(f"❌ ERRO CRÍTICO NO SCRIPT: {e}")
