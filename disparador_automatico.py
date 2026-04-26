@@ -6,10 +6,15 @@ from datetime import datetime, timedelta
 
 # ================= CONFIGURAÇÕES =================
 
+# No Railway, certifique-se de que estas variáveis de ambiente estão preenchidas
 API_KEY = (os.getenv("BREVO_API_KEY") or "").strip()
-REMETENTE_EMAIL = (os.getenv("REMETENTE_EMAIL") or "").strip()
+REMETENTE_EMAIL = (os.getenv("REMETENTE_EMAIL") or "comercial@tec9informatica.com.br").strip()
 REMETENTE_NOME = "TEC9 Informática"
 EMAIL_RELATORIO = (os.getenv("EMAIL_RELATORIO") or "comercial@tec9informatica.com.br").strip()
+
+# ID do modelo que você criou na aba "Modelos" da Brevo
+# Se o ID for diferente de 5, mude o número abaixo:
+ID_MODELO_BREVO = 5 
 
 ARQUIVOS_CLIENTES_POSSIVEIS = [
     "Clientes_TEC9.xlsx.csv",
@@ -18,45 +23,22 @@ ARQUIVOS_CLIENTES_POSSIVEIS = [
 ]
 
 ARQUIVO_HISTORICO = "historico_envios.csv"
-
-# NOVO LIMITE CONFIGURADO
 LIMITE_DIARIO = 300
-
-URL_ENVIO_BREVO = "https://api.brevo.com/v3/smtp/email"
-
-# ================= CAMPANHAS =================
-
-CAMPANHAS = [
-    {
-        "nome": "SEMANA_1",
-        "assunto": "Sua empresa pode estar gastando mais do que deveria com TI",
-        "html": """
-        <p>Olá, tudo bem?</p>
-        <p>Podemos ajudar sua empresa a reduzir custos com tecnologia e melhorar o desempenho do seu ambiente de TI.</p>
-        <p><b>TEC9 Informática</b><br>
-        Soluções em computadores, periféricos, upgrades e equipamentos corporativos.</p>
-        <p>Responda este e-mail ou fale com a nossa equipe.</p>
-        """
-    }
-]
+URL_ENVIO_BREVO = "https://brevo.com"
 
 # ================= FUNÇÕES =================
 
 def validar_configuracoes():
     if not API_KEY:
-        raise ValueError("BREVO_API_KEY não configurada.")
+        raise ValueError("BREVO_API_KEY não configurada no Railway.")
     if not REMETENTE_EMAIL:
         raise ValueError("REMETENTE_EMAIL não configurada.")
-
-def obter_campanha():
-    semana = datetime.now().isocalendar()[1]
-    return CAMPANHAS[semana % len(CAMPANHAS)]
 
 def encontrar_arquivo_clientes():
     for arquivo in ARQUIVOS_CLIENTES_POSSIVEIS:
         if os.path.exists(arquivo):
             return arquivo
-    raise FileNotFoundError("Nenhum arquivo de clientes encontrado.")
+    raise FileNotFoundError("Nenhum arquivo de clientes encontrado (Excel ou CSV).")
 
 def carregar_clientes():
     arquivo = encontrar_arquivo_clientes()
@@ -88,39 +70,44 @@ def filtrar_clientes(df_clientes, df_historico):
     df_filtrado = df_clientes[~df_clientes["email"].isin(enviados_recentes)]
     return df_filtrado.head(LIMITE_DIARIO)
 
-def enviar_email(email, campanha):
-    headers = {"accept": "application/json", "api-key": API_KEY, "content-type": "application/json"}
+def enviar_email(email):
+    headers = {
+        "accept": "application/json", 
+        "api-key": API_KEY, 
+        "content-type": "application/json"
+    }
+    
+    # Aqui é onde a mágica acontece: chamamos o templateId em vez de mandar texto puro
     payload = {
         "sender": {"name": REMETENTE_NOME, "email": REMETENTE_EMAIL},
         "to": [{"email": email}],
-        "subject": campanha["assunto"],
-        "htmlContent": campanha["html"]
+        "templateId": ID_MODELO_BREVO
     }
+    
     try:
         response = requests.post(URL_ENVIO_BREVO, json=payload, headers=headers, timeout=30)
         return response.status_code, response.text
     except Exception as e:
         return None, str(e)
 
-def salvar_historico_unico(email, campanha_nome):
-    """Salva no histórico imediatamente após o envio de cada e-mail"""
+def salvar_historico_unico(email):
     novo_registro = pd.DataFrame([{
         "email": email,
         "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "campanha": campanha_nome
+        "campanha": f"Template_{ID_MODELO_BREVO}"
     }])
     if os.path.exists(ARQUIVO_HISTORICO):
         novo_registro.to_csv(ARQUIVO_HISTORICO, mode='a', header=False, index=False)
     else:
         novo_registro.to_csv(ARQUIVO_HISTORICO, index=False)
 
-def enviar_relatorio(enviados, campanha_nome):
+def enviar_relatorio(enviados):
     headers = {"accept": "application/json", "api-key": API_KEY, "content-type": "application/json"}
-    html = f"<h2>📊 Relatório TEC9</h2><p>E-mails enviados agora: {enviados}</p>"
+    html = f"<h2>📊 Relatório TEC9</h2><p>E-mails enviados com sucesso hoje: <b>{enviados}</b> usando o modelo {ID_MODELO_BREVO}.</p>"
     payload = {
         "sender": {"name": REMETENTE_NOME, "email": REMETENTE_EMAIL},
         "to": [{"email": EMAIL_RELATORIO}],
-        "subject": f"Relatório TEC9 - {campanha_nome}",
+        "subject": f"Relatório de Disparo - {datetime.now().strftime('%d/%m/%Y')}",
         "htmlContent": html
     }
     requests.post(URL_ENVIO_BREVO, json=payload, headers=headers)
@@ -128,38 +115,37 @@ def enviar_relatorio(enviados, campanha_nome):
 # ================= EXECUÇÃO =================
 
 def main():
-    print("🚀 INICIANDO DISPARO AUTOMÁTICO TEC9")
+    print(f"🚀 INICIANDO DISPARO TEC9 - MODELO ID: {ID_MODELO_BREVO}")
     try:
         validar_configuracoes()
-        campanha = obter_campanha()
         clientes = carregar_clientes()
         historico = carregar_historico()
         lista_envio = filtrar_clientes(clientes, historico)
 
         if len(lista_envio) == 0:
-            print("ℹ️ Nenhum contato novo para enviar.")
+            print("ℹ️ Nenhum contato novo para enviar na lista filtrada.")
             return
 
         enviados = 0
         for _, row in lista_envio.iterrows():
             email = row["email"]
-            status, retorno = enviar_email(email, campanha)
+            status, retorno = enviar_email(email)
 
             if status in [200, 201, 202]:
                 enviados += 1
                 print(f"✅ [{enviados}] ENVIADO: {email}")
-                salvar_historico_unico(email, campanha["nome"]) # SALVAMENTO IMEDIATO
+                salvar_historico_unico(email)
             else:
-                print(f"❌ ERRO: {email} - Status: {status}")
+                print(f"❌ ERRO no e-mail {email}: Status {status} - {retorno}")
 
-            time.sleep(1.5) # Pausa leve entre envios
+            time.sleep(2) # Pausa de 2 segundos para evitar bloqueios de spam
 
         if enviados > 0:
-            enviar_relatorio(enviados, campanha["nome"])
-        print("📊 FINALIZADO")
+            enviar_relatorio(enviados)
+        print(f"📊 FINALIZADO. Total de envios: {enviados}")
 
     except Exception as e:
-        print(f"❌ ERRO CRÍTICO: {e}")
+        print(f"❌ ERRO CRÍTICO NO SCRIPT: {e}")
 
 if __name__ == "__main__":
     main()
