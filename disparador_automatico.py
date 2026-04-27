@@ -13,7 +13,7 @@ REMETENTE_NOME = "TEC9 Informática"
 EMAIL_RELATORIO = (os.getenv("EMAIL_RELATORIO") or "comercial@tec9informatica.com.br").strip()
 
 # ID do modelo que você criou na aba "Modelos" da Brevo
-ID_MODELO_BREVO = 5 
+ID_MODELO_BREVO = 6 
 
 ARQUIVOS_CLIENTES_POSSIVEIS = [
     "Clientes_TEC9.xlsx.csv",
