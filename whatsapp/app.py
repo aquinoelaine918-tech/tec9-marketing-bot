@@ -4,10 +4,10 @@ import os
 
 app = Flask(__name__)
 
-# Configurações estritamente validadas do seu painel Meta
+# Configurações integradas com o painel de variáveis do seu Railway
 VERIFY_TOKEN = "TEC9_TOKEN"
-WHATSAPP_TOKEN = "EAAK409sUM3YBRVp9nT4Dr72el46ZCHvgVvnKowN1qBJKti5gD1ixN5MNfX8D6t5iB8FWd6LAasxstr8jNseqBBEoH"
-PHONE_NUMBER_ID = "1099079283287430"
+WHATSAPP_TOKEN = os.getenv("EAAK409sUM3YBRYFqSVuTAVdObC87ZA2keusWA7pZCqFeqPoZA63iXuz5kZCZB3dMAZCVq6eiikWKX8TrCYXZCu8Bzcn4gyMBP0Huo9ZApwARBtZCY1oPe7RpvZA8sYzrJ89ZCGPvmGvXpoAEpiNpxrp5DqVrkVVHYvGp5zaV7mRKx4lVHuqP7sPqZCQcl9l8Gg0YRTJZBEgm7wvTNI0t4503ZAbgWwaL6m7osUTmfWBXmdvh7wtCZBGhYYIPobZCThVKaO7JEYxPLZCUyJ3yRRrSpZAkdCTs1ZCsOwgawZDZD")
+PHONE_NUMBER_ID = os.getenv("1099079283287430")
 
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
@@ -28,11 +28,12 @@ def receber_mensagem():
     print(data)
 
     try:
+        # Navegação segura na estrutura JSON da Meta
         entry = data.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
 
-        # Ignora notificações de leitura ou entrega
+        # Ignora se for apenas uma notificação de status (enviado, entregue, lido)
         if "messages" not in value:
             return "ok", 200
 
@@ -42,31 +43,32 @@ def receber_mensagem():
 
         print(f"TIPO: {tipo} DE: {numero}")
 
-        # Ignora payloads de erro enviados pela própria API da Meta
+        # Proteção contra payloads de erro enviados pela própria Meta
         if "errors" in message:
-            print(f"Erro recebido da Meta: {message['errors']}")
+            print(f"Erro recebido da Meta no webhook: {message['errors']}")
             return "ok", 200
 
-        # Ignora com segurança áudios, imagens, figurinhas e reações
+        # Filtro estrito: ignora de forma segura áudios, imagens, figurinhas, reações, etc.
         if tipo != "text" or "text" not in message:
             print("Mensagem de tipo não suportado ignorada com sucesso.")
             return "ok", 200
 
+        # Captura o texto enviado pelo cliente
         texto = message["text"].get("body", "").strip()
 
         print(f"MENSAGEM DE {numero}: {texto}")
 
-        # Executa o envio da resposta
+        # Executa o envio da resposta automática
         enviar_mensagem(numero, f"Você disse: {texto}")
         return "ok", 200
 
     except Exception as erro:
-        # Registra a falha internamente, mas retorna 200 para evitar loops de reenvio da Meta
+        # Evita loops de reenvio da Meta salvando o erro no log e respondendo 200 OK
         print(f"ERRO INTERNO EVITADO: {erro}")
         return "ok", 200
 
 def enviar_mensagem(numero, mensagem):
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
