@@ -14,9 +14,50 @@ WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
 PHONE_NUMBER_ID = "1099079283287430"
 
+SITE_BUSCA = "https://tec9informatica.com.br/busca?q="
+
 WHATSAPP_ESPECIALISTA = "https://wa.me/5511977315223"
 
-SITE_BUSCA = "https://tec9informatica.com.br/busca?q="
+HORARIO_ATENDIMENTO = (
+    "🕘 *Horário de atendimento TEC9 Informática*\n"
+    "Segunda a Sexta-feira\n"
+    "Das 09:00 às 18:00"
+)
+
+# =========================================================
+# PALAVRAS IMPORTANTES
+# =========================================================
+
+saudacoes = [
+    "oi",
+    "ola",
+    "olá",
+    "bom dia",
+    "boa tarde",
+    "boa noite",
+    "menu",
+    "inicio",
+    "início"
+]
+
+palavras_quentes = [
+    "comprar",
+    "orcamento",
+    "orçamento",
+    "desconto",
+    "fechar",
+    "pedido",
+    "pix",
+    "urgente"
+]
+
+palavras_empresa = [
+    "empresa",
+    "cnpj",
+    "corporativo",
+    "servidor",
+    "infraestrutura"
+]
 
 # =========================================================
 # HOME
@@ -27,7 +68,7 @@ def home():
     return "TEC9 BOT ONLINE 🚀", 200
 
 # =========================================================
-# VERIFICAÇÃO WEBHOOK
+# VERIFICAÇÃO WEBHOOK META
 # =========================================================
 
 @app.route("/webhook", methods=["GET"])
@@ -43,7 +84,7 @@ def verify_webhook():
     return "Erro de verificação", 403
 
 # =========================================================
-# RECEBER MENSAGEM
+# RECEBER MENSAGENS
 # =========================================================
 
 @app.route("/webhook", methods=["POST"])
@@ -89,15 +130,7 @@ def receber_mensagem():
                 # MENU INICIAL
                 # =====================================================
 
-                if texto in [
-                    "oi",
-                    "ola",
-                    "olá",
-                    "bom dia",
-                    "boa tarde",
-                    "boa noite",
-                    "menu"
-                ]:
+                if texto in saudacoes:
 
                     menu = (
                         "Olá 👋 Seja bem-vindo(a) à *TEC9 Informática* 🚀\n\n"
@@ -105,7 +138,8 @@ def receber_mensagem():
                         "1️⃣ Pessoa Jurídica\n"
                         "2️⃣ Pessoa Física\n"
                         "3️⃣ Upgrade / SSD / peças\n\n"
-                        "Ou digite diretamente o produto que procura 👇"
+                        "Ou digite diretamente o produto que procura 👇\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
                     responder_mensagem(numero, menu)
@@ -125,7 +159,8 @@ def receber_mensagem():
                         "📌 Produto desejado\n"
                         "📌 Quantidade\n"
                         "📌 Cidade/UF\n\n"
-                        "Nossa equipe comercial dará continuidade ao atendimento 🚀"
+                        "Nossa equipe comercial dará continuidade ao atendimento 🚀\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
                     responder_mensagem(numero, resposta_pj)
@@ -143,7 +178,8 @@ def receber_mensagem():
                         "📌 Produto desejado\n"
                         "📌 Quantidade\n"
                         "📌 Cidade/UF\n\n"
-                        "Nossa equipe comercial dará continuidade ao atendimento 🚀"
+                        "Nossa equipe comercial dará continuidade ao atendimento 🚀\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
                     responder_mensagem(numero, resposta_pf)
@@ -163,7 +199,8 @@ def receber_mensagem():
                         "Fonte\n"
                         "Notebook\n"
                         "Processador\n"
-                        "Placa de vídeo"
+                        "Placa de vídeo\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
                     responder_mensagem(numero, resposta_upgrade)
@@ -172,65 +209,53 @@ def receber_mensagem():
                 # CLIENTE QUENTE
                 # =====================================================
 
-                elif any(p in texto for p in [
-                    "comprar",
-                    "orcamento",
-                    "orçamento",
-                    "desconto",
-                    "pedido",
-                    "fechar",
-                    "pix",
-                    "urgente"
-                ]):
+                elif any(palavra in texto for palavra in palavras_quentes):
 
-                    mensagem = (
+                    mensagem_quente = (
                         "🔥 Identificamos interesse comercial.\n\n"
                         "Para agilizar seu atendimento e verificar condições especiais, "
                         "fale diretamente com nossa especialista 👇\n\n"
-                        f"{WHATSAPP_ESPECIALISTA}"
+                        f"{WHATSAPP_ESPECIALISTA}\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
-                    responder_mensagem(numero, mensagem)
+                    responder_mensagem(numero, mensagem_quente)
 
                 # =====================================================
                 # EMPRESA AUTOMÁTICO
                 # =====================================================
 
-                elif any(p in texto for p in [
-                    "empresa",
-                    "cnpj",
-                    "corporativo",
-                    "servidor",
-                    "infraestrutura"
-                ]):
+                elif any(palavra in texto for palavra in palavras_empresa):
 
-                    mensagem = (
+                    mensagem_empresa = (
                         "🏢 Atendimento corporativo identificado.\n\n"
-                        "Para atendimento especializado 👇\n\n"
-                        f"{WHATSAPP_ESPECIALISTA}"
+                        "Para um atendimento especializado 👇\n\n"
+                        f"{WHATSAPP_ESPECIALISTA}\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
-                    responder_mensagem(numero, mensagem)
+                    responder_mensagem(numero, mensagem_empresa)
 
                 # =====================================================
-                # BUSCA SIMPLES
+                # BUSCA AUTOMÁTICA PRODUTO
                 # =====================================================
 
                 else:
 
                     busca = texto.replace(" ", "+")
 
-                    link = f"{SITE_BUSCA}{busca}"
+                    link_busca = f"{SITE_BUSCA}{busca}"
 
-                    mensagem = (
+                    mensagem_produto = (
                         f"🔎 Encontrei opções relacionadas a: *{texto_original}*\n\n"
-                        f"Veja aqui:\n"
-                        f"{link}\n\n"
-                        f"Se desejar atendimento especializado 👇\n"
-                        f"{WHATSAPP_ESPECIALISTA}"
+                        f"Confira aqui:\n"
+                        f"{link_busca}\n\n"
+                        f"Se desejar ajuda para escolher o modelo ideal 👇\n"
+                        f"{WHATSAPP_ESPECIALISTA}\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
                     )
 
-                    responder_mensagem(numero, mensagem)
+                    responder_mensagem(numero, mensagem_produto)
 
     except Exception as erro:
 
@@ -242,7 +267,7 @@ def receber_mensagem():
     return "ok", 200
 
 # =========================================================
-# ENVIAR MENSAGEM
+# ENVIAR MENSAGEM WHATSAPP
 # =========================================================
 
 def responder_mensagem(numero, mensagem):
