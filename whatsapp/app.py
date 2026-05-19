@@ -6,11 +6,14 @@ app = Flask(__name__)
 
 VERIFY_TOKEN = "TEC9_TOKEN"
 WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+PHONE_NUMBER_ID = "1099079283287430"
 
-# Dicionário temporário na memória para lembrar a etapa de cada cliente
-# Nota: Como zera ao reiniciar o servidor, para produção futura recomenda-se um banco de dados
+# Dicionário na memória para controlar o fluxo de cada cliente
 estados_clientes = {}
+
+@app.route("/")
+def home():
+    return "BOT ONLINE", 200
 
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
@@ -20,111 +23,120 @@ def verify_webhook():
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
+
     return "Erro de verificação", 403
 
 @app.route("/webhook", methods=["POST"])
 def receber_mensagem():
     data = request.get_json()
 
+    print("EVENTO RECEBIDO:")
+    print(data)
+
     try:
-        entry = data.get("entry", [{}])
-        changes = entry[0].get("changes", [{}])
-        value = changes[0].get("value", {})
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        messages = value.get("messages")
 
-        if "messages" not in value:
-            return "ok", 200
+        if messages:
+            message = messages[0]
+            numero = message["from"]
+            tipo = message["type"]
 
-        message = value["messages"][0]
-        tipo = message.get("type")
-        numero = message.get("from")
+            print(f"TIPO: {tipo} DE: {numero}")
 
-        if "errors" in message or tipo != "text" or "text" not in message:
-            return "ok", 200
+            if tipo == "text":
+                texto_cliente = message["text"]["body"].strip()
+                print(f"MENSAGEM DE {numero}: {texto_cliente}")
 
-        texto_cliente = message["text"].get("body", "").strip()
+                # LÓGICA DOS 3 FLUXOS DE ATENDIMENTO
+                estado_atual = estados_clientes.get(numero, "inicio")
 
-        # Verifica em qual etapa o cliente está
-        estado_atual = estados_clientes.get(numero, "inicio")
+                if estado_atual == "inicio":
+                    # Bloco 1: Menu Inicial
+                    menu_inicial = (
+                        "Olá, seja bem-vindo à TEC9 Informática 🚀\n\n"
+                        "Para iniciarmos seu atendimento, selecione uma opção:\n\n"
+                        "1️⃣ Pessoa Jurídica\n"
+                        "2️⃣ Pessoa Física\n\n"
+                        "Digite o número correspondente 👇"
+                    )
+                    responder_mensagem(numero, menu_inicial)
+                    estados_clientes[numero] = "aguardando_opcao"
 
-        if estado_atual == "inicio":
-            # Bloco 1: Menu Inicial de Boas-vindas
-            menu_inicial = (
-                "Olá, seja bem-vindo à TEC9 Informática 🚀\n\n"
-                "Para iniciarmos seu atendimento, selecione uma opção:\n\n"
-                "1️⃣ Pessoa Jurídica\n"
-                "2️⃣ Pessoa Física\n\n"
-                "Digite o número correspondente 👇"
-            )
-            enviar_mensagem(numero, menu_inicial)
-            estados_clientes[numero] = "aguardando_opcao"
+                elif estado_atual == "aguardando_opcao":
+                    if texto_cliente == "1":
+                        # Bloco 2: Pessoa Jurídica
+                        resposta_pj = (
+                            "🏢 *Atendimento Pessoa Jurídica*\n\n"
+                            "Para agilizar seu orçamento e atendimento corporativo, envie as informações abaixo:\n\n"
+                            "📌 CNPJ\n"
+                            "📌 Nome do comprador/responsável\n"
+                            "📌 E-mail corporativo\n"
+                            "📌 Produto ou solução desejada\n"
+                            "📌 Quantidade\n"
+                            "📌 Cidade/UF para entrega\n\n"
+                            "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
+                        )
+                        responder_mensagem(numero, resposta_pj)
+                        estados_clientes[numero] = "dados_enviados"
 
-        elif estado_atual == "aguardando_opcao":
-            if texto_cliente == "1":
-                # Bloco 2: Resposta para Pessoa Jurídica
-                resposta_pj = (
-                    "🏢 *Atendimento Pessoa Jurídica*\n\n"
-                    "Para agilizar seu orçamento e atendimento corporativo, envie as informações abaixo:\n\n"
-                    "📌 CNPJ\n"
-                    "📌 Nome do comprador/responsável\n"
-                    "📌 E-mail corporativo\n"
-                    "📌 Produto ou solução desejada\n"
-                    "📌 Quantidade\n"
-                    "📌 Cidade/UF para entrega\n\n"
-                    "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
-                )
-                enviar_mensagem(numero, resposta_pj)
-                estados_clientes[numero] = "dados_enviados"
+                    elif texto_cliente == "2":
+                        # Bloco 3: Pessoa Física
+                        resposta_pf = (
+                            "👤 *Atendimento Pessoa Física*\n\n"
+                            "Para prosseguirmos com seu atendimento, envie:\n\n"
+                            "📌 Nome\n"
+                            "📌 Produto desejado\n"
+                            "📌 Quantidade\n"
+                            "📌 Cidade/UF para entrega\n"
+                            "📌 E-mail para envio da proposta (opcional)\n\n"
+                            "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
+                        )
+                        responder_mensagem(numero, resposta_pf)
+                        estados_clientes[numero] = "dados_enviados"
 
-            elif texto_cliente == "2":
-                # Bloco 3: Resposta para Pessoa Física
-                resposta_pf = (
-                    "👤 *Atendimento Pessoa Física*\n\n"
-                    "Para prosseguirmos com seu atendimento, envie:\n\n"
-                    "📌 Nome\n"
-                    "📌 Produto desejado\n"
-                    "📌 Quantidade\n"
-                    "📌 Cidade/UF para entrega\n"
-                    "📌 E-mail para envio da proposta (opcional)\n\n"
-                    "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
-                )
-                enviar_mensagem(numero, resposta_pf)
-                estados_clientes[numero] = "dados_enviados"
+                    else:
+                        # Resposta caso digite algo diferente de 1 ou 2
+                        opcao_invalida = "Desculpe, não entendi. Digite apenas *1* para Pessoa Jurídica ou *2* para Pessoa Física. 👇"
+                        responder_mensagem(numero, opacity_invalida)
 
-            else:
-                # Caso digite qualquer outra coisa inválida no menu
-                opcao_invalida = "Desculpe, não entendi. Digite apenas *1* para Pessoa Jurídica ou *2* para Pessoa Física. 👇"
-                enviar_mensagem(numero, opcao_invalida)
-
-        elif estado_atual == "dados_enviados":
-            # Aqui o cliente já escolheu o fluxo e está digitando os dados dele.
-            # O bot apenas lê, mas não interfere para deixar o humano assumir.
-            print(f"Cliente {numero} enviando dados do orçamento: {texto_cliente}")
-
-        return "ok", 200
+                elif estado_atual == "dados_enviados":
+                    # Deixa o fluxo livre para o cliente digitar os dados sem o bot responder
+                    print(f"Cliente {numero} está digitando os dados solicitados.")
 
     except Exception as erro:
-        print(f"ERRO INTERNO EVITADO: {erro}")
-        return "ok", 200
+        print("ERRO AO PROCESSAR:")
+        print(erro)
 
-def enviar_mensagem(numero, mensagem):
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
+    return "ok", 200
+
+def responder_mensagem(numero, mensagem):
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
+
     payload = {
         "messaging_product": "whatsapp",
         "to": numero,
         "type": "text",
-        "text": {"body": mensagem}
+        "text": {
+            "body": mensagem
+        }
     }
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        print(f"STATUS ENVIO: {response.status_code}")
-    except Exception as e:
-        print(f"Falha na requisição: {e}")
+
+    resposta = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
+
+    print(f"STATUS ENVIO: {resposta.status_code}")
+    print(f"RESPOSTA ENVIO: {resposta.text}")
 
 if __name__ == "__main__":
-    porta = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=porta)
-
+    app.run(host="0.0.0.0", port=8080)
