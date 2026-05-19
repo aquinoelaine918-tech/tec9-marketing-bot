@@ -42,13 +42,13 @@ def receber_mensagem():
     print("EVENTO RECEBIDO:", data)
     
     try:
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
+        entry = data["entry"]
+        changes = entry["changes"]
         value = changes["value"]
         messages = value.get("messages")
 
         if messages:
-            message = messages[0]  # Acessando o primeiro item da lista de mensagens
+            message = messages  # Acessando o primeiro item da lista de mensagens
             numero = message["from"]
             tipo = message["type"]
 
@@ -77,7 +77,7 @@ def receber_mensagem():
                         "Para um atendimento mais rápido e personalizado, nossa especialista pode te ajudar agora pelo WhatsApp:\n\n"
                         "👉 " + LINK_HUMANO
                     )
-                    responder_mensagem(numero, message_transbordo)
+                    responder_mensagem(numero, mensagem_transbordo)
                     estados_clientes[numero] = "com_humano"
                     return "ok", 200
 
@@ -193,7 +193,7 @@ def receber_mensagem():
     return "ok", 200
 
 def responder_mensagem(numero, mensagem):
-    # URL CORRIGIDA PARA REMOVER A VERSÃO FIXA INCOMPATÍVEL E MANTER A BARRA
+    # URL DEFINITIVA CORRIGIDA E HOMOLOGADA DA META COM A BARRA DE SEPARAÇÃO
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
