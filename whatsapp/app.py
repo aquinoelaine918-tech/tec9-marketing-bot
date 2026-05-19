@@ -8,7 +8,7 @@ app = Flask(__name__)
 VERIFY_TOKEN = "TEC9_TOKEN"
 WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = "1099079283287430"
-LINK_HUMANO = "https://wa.me/5511977315223"
+LINK_HUMANO = "https://wa.me"
 
 # Dicionário na memória para controlar as etapas do funil de cada cliente
 estados_clientes = {}
@@ -39,6 +39,7 @@ def verificar_gatilhos_humano(texto):
 @app.route("/webhook", methods=["POST"])
 def receber_mensagem():
     data = request.get_json()
+    print("EVENTO RECEBIDO:", data)
     
     try:
         entry = data["entry"][0]
@@ -47,7 +48,7 @@ def receber_mensagem():
         messages = value.get("messages")
 
         if messages:
-            message = messages[0]
+            message = messages[0]  # Correção crucial aqui: acessando o primeiro item da lista
             numero = message["from"]
             tipo = message["type"]
 
@@ -55,6 +56,8 @@ def receber_mensagem():
                 texto_cliente = message["text"]["body"].strip()
                 texto_minusculo = texto_cliente.lower()
                 
+                print(f"TIPO: {tipo} DE: {numero} | MENSAGEM: {texto_cliente}")
+
                 # Resgata ou define o estado inicial do cliente
                 estado_atual = estados_clientes.get(numero, "inicio")
 
@@ -62,7 +65,7 @@ def receber_mensagem():
                 if texto_minusculo in ["menu", "reiniciar", "voltar"]:
                     estado_atual = "inicio"
 
-                # Se o cliente já foi encaminhado para o humano, o bot silencia (Regra de Transbordo)
+                # Se o cliente já foi encaminhado para o humano, o bot silencia
                 if estado_atual == "com_humano" and texto_minusculo != "menu":
                     print(f"Bot omitido. Cliente {numero} em atendimento humano.")
                     return "ok", 200
@@ -156,41 +159,33 @@ def receber_mensagem():
                         responder_mensagem(numero, menu_invalido)
 
                 # ========================================================
-                # ETAPA 3 — SUB-CATEGORIAS (QUALIFICAÇÃO FINAL)
+                # ETAPA 3 — SUB-CATEGORIAS / BUSCA DE PRODUTOS
                 # ========================================================
-                elif estado_atual in ["aguardando_categoria_pf", "aguardando_categoria_pj"]:
-                    # Valida se o cliente escolheu uma opção válida ou digitou texto direto
+                elif estado_atual in ["aguardando_categoria_pf", "aguardando_categoria_pj", "ia_busca_produtos"]:
                     opcoes_validas = ["1", "2", "3", "4", "5"]
                     
-                    if texto_cliente in opcoes_validas:
-                        msg_Transicao_ia = (
+                    # Se ele estava no sub-menu e digitou um número válido, pede o detalhe do modelo
+                    if estado_atual != "ia_busca_produtos" and texto_cliente in opcoes_validas:
+                        msg_transicao = (
                             "Entendido! Estou checando as melhores opções no sistema.\n\n"
-                            "O que exatamente você busca nessa categoria? Pode digitar o modelo ou componente (Ex: i5, 16GB, Ryzen, Dell) 👇"
+                            "O que exatamente você busca nessa categoria? Pode digitar o modelo ou componente (Ex: i5, 16GB, Dell, SSD) 👇"
                         )
-                        responder_mensagem(numero, msg_Transicao_ia)
+                        responder_mensagem(numero, msg_transicao)
                         estados_clientes[numero] = "ia_busca_produtos"
                     else:
-                        # Se digitar texto direto, já joga para o interpretador de produtos
-                        estado_atual = "ia_busca_produtos"
+                        # Se já estava na fase de busca ou digitou texto direto, gera a URL dinâmica
+                        termo_url = urllib.parse.quote(texto_cliente.strip())
+                        url_busca = f"https://tec9informatica.com.br{termo_url}"
 
-                # ========================================================
-                # ETAPA 4 — SISTEMA INTELIGENTE DE BUSCA (PRÉ-IA CONTROLADA)
-                # ========================================================
-                if estado_atual == "ia_busca_produtos" or estados_clientes.get(numero) == "ia_busca_produtos":
-                    # Transforma a entrada do cliente em um termo de busca seguro para URL
-                    termo_url = urllib.parse.quote(texto_cliente.strip())
-                    url_busca = f"https://tec9informatica.com.br/busca?q={termo_url}"
-
-                    resposta_busca = (
-                        f"Perfeito 👍\n\n"
-                        f"Temos diversas opções disponíveis relacionadas a '{texto_cliente}'.\n\n"
-                        f"Veja os modelos e preços atualizados direto no nosso site:\n"
-                        f"👉 {url_busca}\n\n"
-                        f"Se encontrar o modelo ideal ou quiser fechar o pedido, basta avisar por aqui para eu te conectar com um vendedor! 🚀"
-                    )
-                    responder_mensagem(numero, resposta_busca)
-                    # Mantém o estado aqui para permitir múltiplas buscas até o transbordo humano
-                    estados_clientes[numero] = "ia_busca_produtos"
+                        resposta_busca = (
+                            f"Perfeito 👍\n\n"
+                            f"Temos diversas opções disponíveis relacionadas a '{texto_cliente}'.\n\n"
+                            f"Veja os modelos e preços atualizados direto no nosso site:\n"
+                            f"👉 {url_busca}\n\n"
+                            f"Se encontrar o modelo ideal ou quiser fechar o pedido, basta avisar por aqui para eu te conectar com um vendedor! 🚀"
+                        )
+                        responder_mensagem(numero, resposta_busca)
+                        estados_clientes[numero] = "ia_busca_produtos"
 
     except Exception as erro:
         print("ERRO AO PROCESSAR:", erro)
@@ -207,7 +202,7 @@ def responder_mensagem(numero, mensagem):
         "messaging_product": "whatsapp",
         "to": numero,
         "type": "text",
-        "text": {"body": message}
+        "text": {"body": mensagem}
     }
     try:
         resposta = requests.post(url, headers=headers, json=payload)
