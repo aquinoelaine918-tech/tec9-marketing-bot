@@ -77,9 +77,7 @@ def receber_mensagem():
 # ENVIAR RESPOSTA
 def responder_mensagem(numero, mensagem):
 
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
-
-
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
