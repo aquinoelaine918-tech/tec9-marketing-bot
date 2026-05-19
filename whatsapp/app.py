@@ -1,102 +1,73 @@
-from flask import Flask, request
-import requests
-import os
+if tipo == "text":
 
-app = Flask(__name__)
+    texto = message["text"]["body"].strip()
 
-VERIFY_TOKEN = "TEC9_TOKEN"
+    print(f"MENSAGEM DE {numero}: {texto}")
 
-WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
+    # MENU INICIAL
+    if texto.lower() in ["oi", "olá", "ola", "menu", "inicio", "início"]:
 
-PHONE_NUMBER_ID = "1099079283287430"
+        resposta = """
+Olá, seja bem-vindo à TEC9 Informática 🚀
 
+Para iniciarmos seu atendimento, selecione uma opção:
 
-@app.route("/")
-def home():
-    return "BOT ONLINE", 200
+1️⃣ Pessoa Jurídica
+2️⃣ Pessoa Física
 
+Digite o número correspondente 👇
+"""
 
-@app.route("/webhook", methods=["GET"])
-def verify_webhook():
+        responder_mensagem(numero, resposta)
 
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
+    # PESSOA JURÍDICA
+    elif texto == "1":
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
+        resposta = """
+🏢 Atendimento Pessoa Jurídica
 
-    return "Erro de verificação", 403
+Para agilizar seu orçamento e atendimento corporativo, envie:
 
+📌 CNPJ
+📌 Nome do comprador/responsável
+📌 E-mail corporativo
+📌 Produto ou solução desejada
+📌 Quantidade
+📌 Cidade/UF para entrega
 
-@app.route("/webhook", methods=["POST"])
-def receber_mensagem():
+Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀
+"""
 
-    data = request.get_json()
+        responder_mensagem(numero, resposta)
 
-    print("EVENTO RECEBIDO:")
-    print(data)
+    # PESSOA FÍSICA
+    elif texto == "2":
 
-    try:
+        resposta = """
+👤 Atendimento Pessoa Física
 
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
-        messages = value.get("messages")
+Para prosseguirmos com seu atendimento, envie:
 
-        if messages:
+📌 Nome
+📌 Produto desejado
+📌 Quantidade
+📌 Cidade/UF para entrega
+📌 E-mail para envio da proposta (opcional)
 
-            message = messages[0]
+Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀
+"""
 
-            numero = message["from"]
+        responder_mensagem(numero, resposta)
 
-            tipo = message["type"]
+    else:
 
-            print(f"TIPO: {tipo} DE: {numero}")
+        resposta = """
+❌ Opção inválida.
 
-            if tipo == "text":
+Digite:
 
-                texto = message["text"]["body"]
+1️⃣ Pessoa Jurídica
+2️⃣ Pessoa Física
+"""
 
-                print(f"MENSAGEM DE {numero}: {texto}")
-
-                responder_mensagem(numero, f"Você disse: {texto}")
-
-    except Exception as erro:
-
-        print("ERRO AO PROCESSAR:")
-        print(erro)
-
-    return "ok", 200
-
-
-def responder_mensagem(numero, mensagem):
-
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {
-            "body": mensagem
-        }
-    }
-
-    resposta = requests.post(
-        url,
-        headers=headers,
-        json=payload
-    )
-
-    print(f"STATUS ENVIO: {resposta.status_code}")
-    print(f"RESPOSTA ENVIO: {resposta.text}")
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+        responder_mensagem(numero, resposta)
