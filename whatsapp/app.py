@@ -1,16 +1,27 @@
 from flask import Flask, request
 import requests
-import os
 
 app = Flask(__name__)
 
-# Configurações integradas com o painel de variáveis do seu Railway
-VERIFY_TOKEN = "tec9token123"
-WHATSAPP_TOKEN = os.getenv("EAAK409sUM3YBRYFqSVuTAVdObC87ZA2keusWA7pZCqFeqPoZA63iXuz5kZCZB3dMAZCVq6eiikWKX8TrCYXZCu8Bzcn4gyMBP0Huo9ZApwARBtZCY1oPe7RpvZA8sYzrJ89ZCGPvmGvXpoAEpiNpxrp5DqVrkVVHYvGp5zaV7mRKx4lVHuqP7sPqZCQcl9l8Gg0YRTJZBEgm7wvTNI0t4503ZAbgWwaL6m7osUTmfWBXmdvh7wtCZBGhYYIPobZCThVKaO7JEYxPLZCUyJ3yRRrSpZAkdCTs1ZCsOwgawZDZD")
-PHONE_NUMBER_ID = os.getenv("1099079283287430")
+# TOKEN DE VERIFICAÇÃO
+VERIFY_TOKEN = "TEC9_TOKEN"
 
+# TOKEN GERADO NO META
+WHATSAPP_TOKEN = "COLE_SEU_TOKEN_AQUI"
+
+# PHONE NUMBER ID
+PHONE_NUMBER_ID = "1099079283287430"
+
+
+@app.route("/")
+def home():
+    return "BOT ONLINE", 200
+
+
+# VERIFICAÇÃO DO WEBHOOK
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
+
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
@@ -20,55 +31,53 @@ def verify_webhook():
 
     return "Erro de verificação", 403
 
+
+# RECEBER MENSAGENS
 @app.route("/webhook", methods=["POST"])
 def receber_mensagem():
+
     data = request.get_json()
 
     print("EVENTO RECEBIDO:")
     print(data)
 
     try:
-        # Navegação segura na estrutura JSON da Meta
-        entry = data.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
 
-        # Ignora se for apenas uma notificação de status (enviado, entregue, lido)
-        if "messages" not in value:
-            return "ok", 200
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        messages = value.get("messages")
 
-        message = value["messages"][0]
-        tipo = message.get("type")
-        numero = message.get("from")
+        if messages:
 
-        print(f"TIPO: {tipo} DE: {numero}")
+            message = messages[0]
 
-        # Proteção contra payloads de erro enviados pela própria Meta
-        if "errors" in message:
-            print(f"Erro recebido da Meta no webhook: {message['errors']}")
-            return "ok", 200
+            numero = message["from"]
 
-        # Filtro estrito: ignora de forma segura áudios, imagens, figurinhas, reações, etc.
-        if tipo != "text" or "text" not in message:
-            print("Mensagem de tipo não suportado ignorada com sucesso.")
-            return "ok", 200
+            tipo = message["type"]
 
-        # Captura o texto enviado pelo cliente
-        texto = message["text"].get("body", "").strip()
+            print(f"TIPO: {tipo} DE: {numero}")
 
-        print(f"MENSAGEM DE {numero}: {texto}")
+            if tipo == "text":
 
-        # Executa o envio da resposta automática
-        enviar_mensagem(numero, f"Você disse: {texto}")
-        return "ok", 200
+                texto = message["text"]["body"]
+
+                print(f"MENSAGEM DE {numero}: {texto}")
+
+                responder_mensagem(numero, f"Você disse: {texto}")
 
     except Exception as erro:
-        # Evita loops de reenvio da Meta salvando o erro no log e respondendo 200 OK
-        print(f"ERRO INTERNO EVITADO: {erro}")
-        return "ok", 200
 
-def enviar_mensagem(numero, mensagem):
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
+        print("ERRO AO PROCESSAR:")
+        print(erro)
+
+    return "ok", 200
+
+
+# ENVIAR RESPOSTA
+def responder_mensagem(numero, mensagem):
+
+    url = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -84,13 +93,15 @@ def enviar_mensagem(numero, mensagem):
         }
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        print(f"Status Envio: {response.status_code}")
-        print(f"Resposta Envio: {response.text}")
-    except Exception as e:
-        print(f"Falha na requisição HTTP de envio: {e}")
+    resposta = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
+
+    print(f"STATUS ENVIO: {resposta.status_code}")
+    print(f"RESPOSTA ENVIO: {resposta.text}")
+
 
 if __name__ == "__main__":
-    porta = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=porta)
+    app.run(host="0.0.0.0", port=8080)
