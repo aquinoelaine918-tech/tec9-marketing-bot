@@ -56,16 +56,20 @@ print("===================================")
 
 df = pd.read_excel("produtos.xlsx")
 
+# limpa espaços dos nomes das colunas
 df.columns = df.columns.str.strip()
 
+print("COLUNAS ENCONTRADAS:")
+print(df.columns)
+
 # remove linhas vazias
-df = df.dropna(subset=["DESCRIÇÃO"])
+df = df.dropna(subset=["Descrição"])
 
 # remove preços zerados
 df = df[df["PREÇO_VENDA"] > 0]
 
 # garante texto
-df["DESCRIÇÃO"] = df["DESCRIÇÃO"].astype(str)
+df["Descrição"] = df["Descrição"].astype(str)
 
 print(df.head())
 
@@ -277,7 +281,7 @@ def webhook():
                         quantidade = int(partes[3].strip())
 
                         resultado = df[
-                            df["DESCRIÇÃO"].str.contains(
+                            df["Descrição"].str.contains(
                                 produto,
                                 case=False,
                                 na=False
@@ -297,7 +301,7 @@ def webhook():
 
                         sku = str(produto_escolhido["SKU"])
 
-                        descricao = str(produto_escolhido["DESCRIÇÃO"])
+                        descricao = str(produto_escolhido["Descrição"])
 
                         preco = float(produto_escolhido["PREÇO_VENDA"])
 
@@ -348,7 +352,7 @@ def webhook():
                 # =====================================================
 
                 resultado = df[
-                    df["DESCRIÇÃO"].str.contains(
+                    df["Descrição"].str.contains(
                         texto,
                         case=False,
                         na=False
@@ -367,7 +371,7 @@ def webhook():
 
                         sku = str(row["SKU"])
 
-                        descricao = str(row["DESCRIÇÃO"])
+                        descricao = str(row["Descrição"])
 
                         preco = float(row["PREÇO_VENDA"])
 
