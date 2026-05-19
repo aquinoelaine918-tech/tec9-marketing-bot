@@ -1,9 +1,6 @@
 from flask import Flask, request
 import requests
 import os
-import threading
-import time
-import pandas as pd
 
 app = Flask(__name__)
 
@@ -17,69 +14,9 @@ WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
 PHONE_NUMBER_ID = "1099079283287430"
 
-SITE_BUSCA = "https://tec9informatica.com.br/busca?q="
-
 WHATSAPP_ESPECIALISTA = "https://wa.me/5511977315223"
 
-# =========================================================
-# CARREGAR PLANILHA PRODUTOS
-# =========================================================
-
-ARQUIVO_EXCEL = "Produto sem preço de custo - Tec9Informatica (1).xlsx"
-
-print("\n================================================")
-print("CARREGANDO PLANILHA...")
-print("================================================\n")
-
-try:
-
-    df = pd.read_excel(ARQUIVO_EXCEL)
-
-    df = df.fillna("")
-
-    print(f"TOTAL PRODUTOS CARREGADOS: {len(df)}")
-
-except Exception as erro:
-
-    print("ERRO AO CARREGAR PLANILHA:")
-    print(erro)
-
-    df = pd.DataFrame()
-
-# =========================================================
-# PALAVRAS IMPORTANTES
-# =========================================================
-
-saudacoes = [
-    "oi",
-    "ola",
-    "olá",
-    "bom dia",
-    "boa tarde",
-    "boa noite",
-    "menu",
-    "inicio",
-    "início"
-]
-
-palavras_empresa = [
-    "empresa",
-    "cnpj",
-    "corporativo",
-    "servidor",
-    "infraestrutura"
-]
-
-palavras_quentes = [
-    "comprar",
-    "orcamento",
-    "orçamento",
-    "desconto",
-    "fechar",
-    "pedido",
-    "urgente",
-    "pix"
-]
+SITE_BUSCA = "https://tec9informatica.com.br/busca?q="
 
 # =========================================================
 # HOME
@@ -106,7 +43,7 @@ def verify_webhook():
     return "Erro de verificação", 403
 
 # =========================================================
-# RECEBER MENSAGENS
+# RECEBER MENSAGEM
 # =========================================================
 
 @app.route("/webhook", methods=["POST"])
@@ -122,7 +59,9 @@ def receber_mensagem():
     try:
 
         entry = data["entry"][0]
+
         changes = entry["changes"][0]
+
         value = changes["value"]
 
         messages = value.get("messages")
@@ -147,35 +86,43 @@ def receber_mensagem():
                 print(f"MENSAGEM: {texto}")
 
                 # =====================================================
-                # SAUDAÇÕES
+                # MENU INICIAL
                 # =====================================================
 
-                if texto in saudacoes:
+                if texto in [
+                    "oi",
+                    "ola",
+                    "olá",
+                    "bom dia",
+                    "boa tarde",
+                    "boa noite",
+                    "menu"
+                ]:
 
-                    menu_inicial = (
+                    menu = (
                         "Olá 👋 Seja bem-vindo(a) à *TEC9 Informática* 🚀\n\n"
-                        "Para agilizar seu atendimento, escolha uma opção:\n\n"
-                        "1️⃣ Empresa / Pessoa Jurídica\n"
-                        "2️⃣ Uso pessoal / Pessoa Física\n"
+                        "Escolha uma opção:\n\n"
+                        "1️⃣ Pessoa Jurídica\n"
+                        "2️⃣ Pessoa Física\n"
                         "3️⃣ Upgrade / SSD / peças\n\n"
                         "Ou digite diretamente o produto que procura 👇"
                     )
 
-                    responder_mensagem(numero, menu_inicial)
+                    responder_mensagem(numero, menu)
 
                 # =====================================================
-                # MENU EMPRESA
+                # PESSOA JURÍDICA
                 # =====================================================
 
                 elif texto == "1":
 
                     resposta_pj = (
                         "🏢 *Atendimento Pessoa Jurídica*\n\n"
-                        "Para agilizar seu orçamento, envie:\n\n"
+                        "Para agilizar seu atendimento, envie:\n\n"
                         "📌 CNPJ\n"
                         "📌 Nome do responsável\n"
-                        "📌 E-mail corporativo\n"
-                        "📌 Produto ou solução desejada\n"
+                        "📌 E-mail\n"
+                        "📌 Produto desejado\n"
                         "📌 Quantidade\n"
                         "📌 Cidade/UF\n\n"
                         "Nossa equipe comercial dará continuidade ao atendimento 🚀"
@@ -184,7 +131,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_pj)
 
                 # =====================================================
-                # MENU PESSOA FÍSICA
+                # PESSOA FÍSICA
                 # =====================================================
 
                 elif texto == "2":
@@ -195,29 +142,28 @@ def receber_mensagem():
                         "📌 Nome\n"
                         "📌 Produto desejado\n"
                         "📌 Quantidade\n"
-                        "📌 Cidade/UF\n"
-                        "📌 E-mail para proposta (opcional)\n\n"
+                        "📌 Cidade/UF\n\n"
                         "Nossa equipe comercial dará continuidade ao atendimento 🚀"
                     )
 
                     responder_mensagem(numero, resposta_pf)
 
                 # =====================================================
-                # MENU UPGRADE
+                # UPGRADE / PEÇAS
                 # =====================================================
 
                 elif texto == "3":
 
                     resposta_upgrade = (
                         "🔧 *Upgrade e Peças*\n\n"
-                        "Me informe qual produto você procura.\n\n"
+                        "Digite o produto desejado.\n\n"
                         "Exemplos:\n"
                         "SSD\n"
                         "Memória\n"
                         "Fonte\n"
-                        "Placa de vídeo\n"
                         "Notebook\n"
                         "Processador\n"
+                        "Placa de vídeo"
                     )
 
                     responder_mensagem(numero, resposta_upgrade)
@@ -226,49 +172,65 @@ def receber_mensagem():
                 # CLIENTE QUENTE
                 # =====================================================
 
-                elif any(palavra in texto for palavra in palavras_quentes):
+                elif any(p in texto for p in [
+                    "comprar",
+                    "orcamento",
+                    "orçamento",
+                    "desconto",
+                    "pedido",
+                    "fechar",
+                    "pix",
+                    "urgente"
+                ]):
 
-                    mensagem_quente = (
-                        "🔥 Identificamos interesse em atendimento comercial.\n\n"
+                    mensagem = (
+                        "🔥 Identificamos interesse comercial.\n\n"
                         "Para agilizar seu atendimento e verificar condições especiais, "
                         "fale diretamente com nossa especialista 👇\n\n"
                         f"{WHATSAPP_ESPECIALISTA}"
                     )
 
-                    responder_mensagem(numero, mensagem_quente)
+                    responder_mensagem(numero, mensagem)
 
                 # =====================================================
                 # EMPRESA AUTOMÁTICO
                 # =====================================================
 
-                elif any(palavra in texto for palavra in palavras_empresa):
+                elif any(p in texto for p in [
+                    "empresa",
+                    "cnpj",
+                    "corporativo",
+                    "servidor",
+                    "infraestrutura"
+                ]):
 
-                    resposta_empresa = (
-                        "🏢 Entendi que seu atendimento é corporativo.\n\n"
-                        "Para um atendimento mais rápido e personalizado, "
-                        "fale diretamente com nossa especialista 👇\n\n"
+                    mensagem = (
+                        "🏢 Atendimento corporativo identificado.\n\n"
+                        "Para atendimento especializado 👇\n\n"
                         f"{WHATSAPP_ESPECIALISTA}"
                     )
 
-                    responder_mensagem(numero, resposta_empresa)
+                    responder_mensagem(numero, mensagem)
 
                 # =====================================================
-                # BUSCA PRODUTO
+                # BUSCA SIMPLES
                 # =====================================================
 
                 else:
 
-                    responder_mensagem(
-                        numero,
-                        "🔎 Estou verificando as opções disponíveis..."
+                    busca = texto.replace(" ", "+")
+
+                    link = f"{SITE_BUSCA}{busca}"
+
+                    mensagem = (
+                        f"🔎 Encontrei opções relacionadas a: *{texto_original}*\n\n"
+                        f"Veja aqui:\n"
+                        f"{link}\n\n"
+                        f"Se desejar atendimento especializado 👇\n"
+                        f"{WHATSAPP_ESPECIALISTA}"
                     )
 
-                    thread = threading.Thread(
-                        target=buscar_produtos,
-                        args=(numero, texto_original)
-                    )
-
-                    thread.start()
+                    responder_mensagem(numero, mensagem)
 
     except Exception as erro:
 
@@ -280,88 +242,7 @@ def receber_mensagem():
     return "ok", 200
 
 # =========================================================
-# BUSCAR PRODUTOS
-# =========================================================
-
-def buscar_produtos(numero, texto_cliente):
-
-    try:
-
-        time.sleep(1)
-
-        texto_busca = texto_cliente.lower()
-
-        resultados = []
-
-        # =====================================================
-        # PROCURA PRODUTOS
-        # =====================================================
-
-        for _, row in df.iterrows():
-
-            nome_produto = str(row.iloc[1]).lower()
-
-            if texto_busca in nome_produto:
-
-                resultados.append(str(row.iloc[1]))
-
-            if len(resultados) >= 5:
-                break
-
-        # =====================================================
-        # PRODUTOS ENCONTRADOS
-        # =====================================================
-
-        if resultados:
-
-            mensagem = (
-                f"✅ Encontrei algumas opções para: *{texto_cliente}*\n\n"
-            )
-
-            for produto in resultados:
-
-                mensagem += f"• {produto}\n"
-
-            busca = texto_cliente.replace(" ", "+")
-
-            link_busca = f"{SITE_BUSCA}{busca}"
-
-            mensagem += (
-                f"\n🔗 Veja mais opções:\n"
-                f"{link_busca}\n\n"
-                f"Se desejar atendimento especializado 👇\n"
-                f"{WHATSAPP_ESPECIALISTA}"
-            )
-
-        # =====================================================
-        # NENHUM PRODUTO
-        # =====================================================
-
-        else:
-
-            busca = texto_cliente.replace(" ", "+")
-
-            link_busca = f"{SITE_BUSCA}{busca}"
-
-            mensagem = (
-                f"🔎 Não encontrei produtos exatos para: *{texto_cliente}*\n\n"
-                f"Mas você pode visualizar opções disponíveis aqui:\n\n"
-                f"{link_busca}\n\n"
-                f"Se desejar ajuda personalizada 👇\n"
-                f"{WHATSAPP_ESPECIALISTA}"
-            )
-
-        responder_mensagem(numero, mensagem)
-
-    except Exception as erro:
-
-        print("\n================================================")
-        print("ERRO BUSCA PRODUTOS:")
-        print(erro)
-        print("================================================\n")
-
-# =========================================================
-# ENVIAR MENSAGEM WHATSAPP
+# ENVIAR MENSAGEM
 # =========================================================
 
 def responder_mensagem(numero, mensagem):
@@ -403,7 +284,7 @@ def responder_mensagem(numero, mensagem):
         print("================================================\n")
 
 # =========================================================
-# INICIAR SERVIDOR
+# START
 # =========================================================
 
 if __name__ == "__main__":
