@@ -113,6 +113,7 @@ def receber_mensagem():
 
 def responder_mensagem(numero, mensagem):
 
+    # URL CORRIGIDA COM GRAPH E COM A BARRA CORRETA
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
     headers = {
