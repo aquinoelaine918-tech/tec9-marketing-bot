@@ -1,80 +1,84 @@
-import os
+from flask import Flask, request
 import requests
-from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
 
-# Configurações extraídas do seu código original
-VERIFY_TOKEN = "tec9token123"
-WHATSAPP_TOKEN = "EAAK4D9sUM3YBROKk2A5ThSTAknCQzdMeazIFpFQDTxD2CZBJCZ8mQyonDdj jNteEjrhy03HkarF8KdLd7cuE3t3NkxzYmYq90wrP2YibRpKZArbZAUPQ0veuduZCmrNlqGFu4t5ZAqy0g"
-PHONE_NUMBER_ID = "109907928287430"
+VERIFY_TOKEN = "TEC9_TOKEN"
 
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({
-        "status": "ok",
-        "message": "TEC9 BOT ONLINE 🚀"
-    }), 200
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+
+PHONE_NUMBER_ID = "1099079283287430"
+
 
 @app.route("/webhook", methods=["GET"])
-def verify():
+def verify_webhook():
+
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+
     return "Erro de verificação", 403
 
+
 @app.route("/webhook", methods=["POST"])
-def webhook():
+def receber_mensagem():
+
     data = request.get_json()
 
-    print("Evento recebido:")
+    print("EVENTO RECEBIDO:")
     print(data)
 
     try:
-        # Validação segura da estrutura de dados do Meta
-        entry = data.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
 
-        # Ignora se for apenas alteração de status de leitura/entrega
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
         if "messages" not in value:
             return "ok", 200
 
         message = value["messages"][0]
+
         tipo = message.get("type")
-        numero = message.get("from")
 
-        print(f"Tipo recebido: {tipo} de {numero}")
+        print(f"TIPO: {tipo}")
 
-        # Se houver erros no payload enviados pelo Meta, ignora e responde 200
-        if "errors" in message:
-            print(f"Erro detectado no payload do WhatsApp: {message['errors']}")
+        # ============================================
+        # IGNORA TIPOS NÃO SUPORTADOS
+        # ============================================
+
+        if tipo != "text":
+
+            print("Mensagem ignorada")
+
             return "ok", 200
 
-        # Bloqueia de forma segura qualquer tipo que não seja texto
-        if tipo != "text" or "text" not in message:
-            print(f"Mensagem do tipo '{tipo}' ignorada com segurança.")
-            return "ok", 200
+        numero = message["from"]
 
-        # Captura o texto enviado pelo cliente
-        texto = message["text"].get("body", "").strip()
-        print(f"Mensagem de {numero}: {texto}")
+        texto = message["text"]["body"]
 
-        # Envia a resposta automática
-        responder_mensagem(numero, f"Você disse: {texto}")
+        print(f"MENSAGEM DE {numero}")
+        print(texto)
+
+        enviar_mensagem(numero, f"Você disse: {texto}")
+
         return "ok", 200
 
-    except Exception as e:
-        # Evita travar o bot em loop; loga o erro internamente e responde OK para o Meta
-        print(f"ERRO INTERNO EVITADO: {e}")
-        return "ok", 200
+    except Exception as erro:
 
-def responder_mensagem(numero, texto):
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
+        print("ERRO:")
+        print(erro)
+
+        return "erro", 500
+
+
+def enviar_mensagem(numero, mensagem):
+
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -86,16 +90,25 @@ def responder_mensagem(numero, texto):
         "to": numero,
         "type": "text",
         "text": {
-            "body": texto
+            "body": mensagem
         }
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        print(f"Status Envio: {response.status_code}")
-        print(f"Resposta Envio: {response.text}")
-    except Exception as e:
-        print(f"Falha ao tentar enviar requisição POST: {e}")
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
+
+    print(response.status_code)
+    print(response.text)
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+
+    porta = int(os.environ.get("PORT", 8080))
+
+    app.run(
+        host="0.0.0.0",
+        port=porta
+    )
