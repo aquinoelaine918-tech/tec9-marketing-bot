@@ -1,15 +1,13 @@
 from flask import Flask, request
 import requests
+import os
 
 app = Flask(__name__)
 
-# TOKEN DE VERIFICAÇÃO
 VERIFY_TOKEN = "TEC9_TOKEN"
 
-# TOKEN GERADO NO META
-WHATSAPP_TOKEN = "COLE_SEU_TOKEN_AQUI"
+WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
-# PHONE NUMBER ID
 PHONE_NUMBER_ID = "1099079283287430"
 
 
@@ -18,7 +16,6 @@ def home():
     return "BOT ONLINE", 200
 
 
-# VERIFICAÇÃO DO WEBHOOK
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
 
@@ -32,7 +29,6 @@ def verify_webhook():
     return "Erro de verificação", 403
 
 
-# RECEBER MENSAGENS
 @app.route("/webhook", methods=["POST"])
 def receber_mensagem():
 
@@ -74,7 +70,6 @@ def receber_mensagem():
     return "ok", 200
 
 
-# ENVIAR RESPOSTA
 def responder_mensagem(numero, mensagem):
 
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
