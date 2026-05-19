@@ -6,7 +6,7 @@ import time
 app = Flask(__name__)
 
 # =========================================================
-# CONFIGURAÇÕES GERAIS
+# CONFIGURAÇÕES
 # =========================================================
 
 VERIFY_TOKEN = "TEC9_TOKEN"
@@ -135,7 +135,7 @@ def receber_mensagem():
                 print(f"MENSAGEM: {texto}")
 
                 # =====================================================
-                # SAUDAÇÕES / MENU
+                # MENU PRINCIPAL
                 # =====================================================
 
                 if texto in SAUDACOES:
@@ -191,17 +191,34 @@ def receber_mensagem():
                     resposta_upgrade = (
                         "🔧 *Upgrade / SSD / Peças*\n\n"
                         "Digite o produto desejado.\n\n"
-                        "Exemplos:\n"
+                        "Exemplos:\n\n"
                         "• SSD\n"
                         "• Memória\n"
                         "• Fonte\n"
                         "• Notebook\n"
                         "• Processador\n"
-                        "• Placa de vídeo\n\n"
+                        "• Placa de vídeo\n"
+                        "• Gabinete\n\n"
                         f"{HORARIO_ATENDIMENTO}"
                     )
 
                     responder_mensagem(numero, resposta_upgrade)
+
+                # =====================================================
+                # DETECTAR CNPJ
+                # =====================================================
+
+                elif texto.isdigit() and len(texto) >= 11:
+
+                    resposta_cnpj = (
+                        "🏢 Identificamos um possível CNPJ.\n\n"
+                        "Nossa equipe comercial dará continuidade ao atendimento.\n\n"
+                        "Para atendimento especializado 👇\n\n"
+                        f"{WHATSAPP_ESPECIALISTA}\n\n"
+                        f"{HORARIO_ATENDIMENTO}"
+                    )
+
+                    responder_mensagem(numero, resposta_cnpj)
 
                 # =====================================================
                 # CLIENTE QUENTE
@@ -235,7 +252,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_empresa)
 
                 # =====================================================
-                # BUSCA PRODUTO
+                # BUSCA AUTOMÁTICA PRODUTO
                 # =====================================================
 
                 else:
@@ -245,8 +262,8 @@ def receber_mensagem():
                     link_busca = f"{SITE_BUSCA}{busca}"
 
                     resposta_produto = (
-                        f"🔎 Encontrei opções relacionadas a: *{texto_original}*\n\n"
-                        f"Confira aqui:\n"
+                        f"🔎 Separei algumas opções relacionadas a: *{texto_original}*\n\n"
+                        f"Confira aqui 😊\n\n"
                         f"{link_busca}\n\n"
                         f"Se desejar ajuda para escolher o modelo ideal 👇\n"
                         f"{WHATSAPP_ESPECIALISTA}\n\n"
@@ -273,8 +290,8 @@ def enviar_menu(numero):
     mensagem = (
         "Olá 👋 Seja bem-vindo(a) à *TEC9 Informática* 🚀\n\n"
         "Para agilizar seu atendimento, escolha uma opção:\n\n"
-        "1️⃣ Pessoa Jurídica\n"
-        "2️⃣ Pessoa Física\n"
+        "1️⃣ Produtos para uso pessoal\n"
+        "2️⃣ Soluções para empresa\n"
         "3️⃣ Upgrade / SSD / peças\n\n"
         "Ou digite diretamente o produto que procura 👇\n\n"
         f"{HORARIO_ATENDIMENTO}"
