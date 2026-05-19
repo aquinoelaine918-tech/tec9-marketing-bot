@@ -42,7 +42,6 @@ def receber_mensagem():
     print("EVENTO RECEBIDO:", data)
     
     try:
-        # Adicionado o índice [0] estrito para desempacotar as listas da Meta com segurança
         entry = data["entry"][0]
         changes = entry["changes"][0]
         value = changes["value"]
@@ -194,7 +193,10 @@ def receber_mensagem():
     return "ok", 200
 
 def responder_mensagem(numero, mensagem):
-    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
+    # Isolamento absoluto da string da URL para evitar erros de concatenação
+    dominio = "https://facebook.com"
+    url = f"{dominio}/{PHONE_NUMBER_ID}/messages"
+    
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
