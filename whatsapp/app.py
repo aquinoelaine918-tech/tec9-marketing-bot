@@ -42,13 +42,14 @@ def receber_mensagem():
     print("EVENTO RECEBIDO:", data)
     
     try:
-        entry = data["entry"]
-        changes = entry["changes"]
+        # Adicionado o índice [0] estrito para desempacotar as listas da Meta com segurança
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
         value = changes["value"]
         messages = value.get("messages")
 
         if messages:
-            message = messages  # Acessando o primeiro item da lista de mensagens
+            message = messages[0]  # Coleta a primeira mensagem da lista
             numero = message["from"]
             tipo = message["type"]
 
@@ -193,7 +194,6 @@ def receber_mensagem():
     return "ok", 200
 
 def responder_mensagem(numero, mensagem):
-    # URL DEFINITIVA CORRIGIDA E HOMOLOGADA DA META COM A BARRA DE SEPARAÇÃO
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
