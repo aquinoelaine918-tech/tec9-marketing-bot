@@ -1,13 +1,39 @@
-if tipo == "text":
+@app.route("/webhook", methods=["POST"])
+def receber_mensagem():
 
-    texto = message["text"]["body"].strip()
+    data = request.get_json()
 
-    print(f"MENSAGEM DE {numero}: {texto}")
+    print("EVENTO RECEBIDO:")
+    print(data)
 
-    # MENU INICIAL
-    if texto.lower() in ["oi", "olá", "ola", "menu", "inicio", "início"]:
+    try:
 
-        resposta = """
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
+        messages = value.get("messages")
+
+        if messages:
+
+            message = messages[0]
+
+            numero = message["from"]
+
+            tipo = message["type"]
+
+            print(f"TIPO: {tipo} DE: {numero}")
+
+            if tipo == "text":
+
+                texto = message["text"]["body"].strip()
+
+                print(f"MENSAGEM DE {numero}: {texto}")
+
+                # MENU INICIAL
+                if texto.lower() in ["oi", "olá", "ola", "menu", "inicio", "início"]:
+
+                    resposta = """
 Olá, seja bem-vindo à TEC9 Informática 🚀
 
 Para iniciarmos seu atendimento, selecione uma opção:
@@ -18,12 +44,12 @@ Para iniciarmos seu atendimento, selecione uma opção:
 Digite o número correspondente 👇
 """
 
-        responder_mensagem(numero, resposta)
+                    responder_mensagem(numero, resposta)
 
-    # PESSOA JURÍDICA
-    elif texto == "1":
+                # PESSOA JURÍDICA
+                elif texto == "1":
 
-        resposta = """
+                    resposta = """
 🏢 Atendimento Pessoa Jurídica
 
 Para agilizar seu orçamento e atendimento corporativo, envie:
@@ -38,12 +64,12 @@ Para agilizar seu orçamento e atendimento corporativo, envie:
 Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀
 """
 
-        responder_mensagem(numero, resposta)
+                    responder_mensagem(numero, resposta)
 
-    # PESSOA FÍSICA
-    elif texto == "2":
+                # PESSOA FÍSICA
+                elif texto == "2":
 
-        resposta = """
+                    resposta = """
 👤 Atendimento Pessoa Física
 
 Para prosseguirmos com seu atendimento, envie:
@@ -57,11 +83,11 @@ Para prosseguirmos com seu atendimento, envie:
 Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀
 """
 
-        responder_mensagem(numero, resposta)
+                    responder_mensagem(numero, resposta)
 
-    else:
+                else:
 
-        resposta = """
+                    resposta = """
 ❌ Opção inválida.
 
 Digite:
@@ -70,4 +96,11 @@ Digite:
 2️⃣ Pessoa Física
 """
 
-        responder_mensagem(numero, resposta)
+                    responder_mensagem(numero, resposta)
+
+    except Exception as erro:
+
+        print("ERRO AO PROCESSAR:")
+        print(erro)
+
+    return "ok", 200
