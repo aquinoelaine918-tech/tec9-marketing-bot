@@ -80,6 +80,7 @@ def responder_mensagem(numero, mensagem):
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
 
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
