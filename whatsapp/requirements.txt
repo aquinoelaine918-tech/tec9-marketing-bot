@@ -1,3 +1,6 @@
 flask
 requests
+pandas
+openpyxl
+reportlab
 gunicorn
