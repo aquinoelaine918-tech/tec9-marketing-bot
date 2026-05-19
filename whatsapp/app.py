@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Configurações estritamente validadas do seu painel Meta
 VERIFY_TOKEN = "TEC9_TOKEN"
 WHATSAPP_TOKEN = "EAAK409sUM3YBRVp9nT4Dr72el46ZCHvgVvnKowN1qBJKti5gD1ixN5MNfX8D6t5iB8FWd6LAasxstr8jNseqBBEoH"
-PHONE_NUMBER_ID = "1099079283287430"
+PHONE_NUMBER_ID = "109907928287430"
 
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
