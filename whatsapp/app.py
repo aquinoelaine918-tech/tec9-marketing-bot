@@ -1,19 +1,26 @@
 from flask import Flask, request
 import requests
 import os
-import time
 import pandas as pd
-from reportlab.lib.pagesizes import A4
+import re
+from datetime import datetime
+
+# PDF
 from reportlab.platypus import (
     SimpleDocTemplate,
-    Table,
-    TableStyle,
     Paragraph,
     Spacer,
-    HRFlowable
+    Table,
+    TableStyle
 )
-from reportlab.lib import colors
+
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+
+# =========================================================
+# APP
+# =========================================================
 
 app = Flask(__name__)
 
@@ -27,73 +34,42 @@ WHATSAPP_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
 PHONE_NUMBER_ID = "1099079283287430"
 
-SITE_BUSCA = "https://tec9informatica.com.br/busca?q="
+EMPRESA = "TEC9 INFORMÁTICA"
 
-WHATSAPP_ESPECIALISTA = "https://wa.me/5511977315223"
+SITE = "https://tec9informatica.com.br"
 
-ARQUIVO_EXCEL = "produtos.xlsx"
+COMERCIAL = "https://wa.me/5511977315223"
 
-HORARIO_ATENDIMENTO = (
-    "🕘 Horário de atendimento:\n"
+HORARIO = (
+    "🕒 Horário de atendimento:\n"
     "Segunda a Sexta-feira\n"
     "Das 09:00 às 18:00"
 )
 
 # =========================================================
-# CARREGAR PLANILHA
+# CARREGA PLANILHA
 # =========================================================
 
-print("\n================================================")
+print("===================================")
 print("CARREGANDO PLANILHA TEC9")
-print("================================================\n")
+print("===================================")
 
-try:
+df = pd.read_excel("produtos.xlsx")
 
-    df = pd.read_excel(ARQUIVO_EXCEL)
+df.columns = df.columns.str.strip()
 
-    df.columns = [col.strip() for col in df.columns]
+# remove linhas vazias
+df = df.dropna(subset=["DESCRIÇÃO"])
 
-    print(f"TOTAL PRODUTOS: {len(df)}")
+# remove preços zerados
+df = df[df["PREÇO_VENDA"] > 0]
 
-except Exception as erro:
+# garante texto
+df["DESCRIÇÃO"] = df["DESCRIÇÃO"].astype(str)
 
-    print("ERRO AO CARREGAR PLANILHA:")
-    print(erro)
+print(df.head())
 
-    df = pd.DataFrame()
-
-# =========================================================
-# PALAVRAS IMPORTANTES
-# =========================================================
-
-SAUDACOES = [
-    "oi",
-    "ola",
-    "olá",
-    "bom dia",
-    "boa tarde",
-    "boa noite",
-    "menu"
-]
-
-PALAVRAS_EMPRESA = [
-    "empresa",
-    "cnpj",
-    "corporativo",
-    "servidor",
-    "licitação",
-    "licitacao"
-]
-
-PALAVRAS_QUENTES = [
-    "comprar",
-    "orcamento",
-    "orçamento",
-    "pedido",
-    "desconto",
-    "fechar",
-    "pix"
-]
+print(f"TOTAL PRODUTOS: {len(df)}")
 
 # =========================================================
 # HOME
@@ -101,45 +77,42 @@ PALAVRAS_QUENTES = [
 
 @app.route("/")
 def home():
-
-    return "TEC9 BOT ONLINE 🚀", 200
+    return "BOT TEC9 ONLINE", 200
 
 # =========================================================
 # VERIFICAÇÃO META
 # =========================================================
 
 @app.route("/webhook", methods=["GET"])
-def verify_webhook():
+def verify():
 
     mode = request.args.get("hub.mode")
-
     token = request.args.get("hub.verify_token")
-
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-
         return challenge, 200
 
-    return "Erro de verificação", 403
+    return "erro", 403
 
 # =========================================================
-# RECEBER MENSAGENS
+# WEBHOOK
 # =========================================================
 
 @app.route("/webhook", methods=["POST"])
-def receber_mensagem():
+def webhook():
 
     data = request.get_json()
 
+    print("===================================")
+    print("EVENTO RECEBIDO")
     print(data)
+    print("===================================")
 
     try:
 
         entry = data["entry"][0]
-
         changes = entry["changes"][0]
-
         value = changes["value"]
 
         messages = value.get("messages")
@@ -154,56 +127,94 @@ def receber_mensagem():
 
             if tipo == "text":
 
-                texto_original = message["text"]["body"].strip()
-
-                texto = texto_original.lower()
+                texto = message["text"]["body"].strip()
 
                 print(f"MENSAGEM: {texto}")
 
-                # =====================================================
-                # MENU
-                # =====================================================
-
-                if texto in SAUDACOES:
-
-                    enviar_menu(numero)
+                texto_lower = texto.lower()
 
                 # =====================================================
-                # PJ
+                # MENU INICIAL
+                # =====================================================
+
+                if (
+                    texto_lower == "oi"
+                    or texto_lower == "olá"
+                    or texto_lower == "ola"
+                    or texto_lower == "menu"
+                ):
+
+                    menu = (
+                        "Olá 👋 Seja bem-vindo(a) à TEC9 Informática 🚀\n\n"
+
+                        "Escolha uma opção:\n\n"
+
+                        "1️⃣ Pessoa Jurídica\n"
+                        "2️⃣ Pessoa Física\n"
+                        "3️⃣ Upgrade / SSD / peças\n\n"
+
+                        "Ou digite diretamente o produto que procura 👇\n\n"
+
+                        "📄 Para gerar orçamento automático:\n"
+                        "orcamento; Nome Cliente; Produto; Quantidade\n\n"
+
+                        f"{HORARIO}"
+                    )
+
+                    responder(numero, menu)
+
+                    return "ok", 200
+
+                # =====================================================
+                # PESSOA JURÍDICA
                 # =====================================================
 
                 elif texto == "1":
 
                     resposta = (
-                        "🏢 *Atendimento Pessoa Jurídica*\n\n"
-                        "Envie:\n\n"
+                        "🏢 Atendimento Pessoa Jurídica\n\n"
+
+                        "Para agilizar seu atendimento envie:\n\n"
+
                         "📌 CNPJ\n"
                         "📌 Nome responsável\n"
                         "📌 Produto desejado\n"
                         "📌 Quantidade\n"
                         "📌 Cidade/UF\n\n"
-                        f"{HORARIO_ATENDIMENTO}"
+
+                        "Nossa equipe comercial dará continuidade 🚀\n\n"
+
+                        f"{HORARIO}"
                     )
 
-                    responder_mensagem(numero, resposta)
+                    responder(numero, resposta)
+
+                    return "ok", 200
 
                 # =====================================================
-                # PF
+                # PESSOA FÍSICA
                 # =====================================================
 
                 elif texto == "2":
 
                     resposta = (
-                        "👤 *Atendimento Pessoa Física*\n\n"
-                        "Envie:\n\n"
+                        "👤 Atendimento Pessoa Física\n\n"
+
+                        "Para agilizar seu atendimento envie:\n\n"
+
                         "📌 Nome\n"
                         "📌 Produto desejado\n"
                         "📌 Quantidade\n"
                         "📌 Cidade/UF\n\n"
-                        f"{HORARIO_ATENDIMENTO}"
+
+                        "Nossa equipe comercial dará continuidade 🚀\n\n"
+
+                        f"{HORARIO}"
                     )
 
-                    responder_mensagem(numero, resposta)
+                    responder(numero, resposta)
+
+                    return "ok", 200
 
                 # =====================================================
                 # UPGRADE
@@ -212,27 +223,52 @@ def receber_mensagem():
                 elif texto == "3":
 
                     resposta = (
-                        "🔧 *Upgrade / SSD / Peças*\n\n"
+                        "⚙️ Upgrade / SSD / peças\n\n"
+
                         "Digite o produto desejado.\n\n"
+
                         "Exemplos:\n"
-                        "• SSD\n"
-                        "• Memória\n"
-                        "• Fonte\n"
-                        "• Notebook\n"
-                        "• Processador\n"
+                        "SSD Kingston\n"
+                        "Memória DDR4\n"
+                        "Fonte 600w\n"
+                        "Processador Ryzen"
                     )
 
-                    responder_mensagem(numero, resposta)
+                    responder(numero, resposta)
+
+                    return "ok", 200
 
                 # =====================================================
-                # GERAR ORÇAMENTO
+                # IDENTIFICA CNPJ
                 # =====================================================
 
-                elif texto.startswith("orcamento") or texto.startswith("orçamento"):
+                cnpj_limpo = re.sub(r"\D", "", texto)
 
-                    partes = texto_original.split(";")
+                if len(cnpj_limpo) == 14:
 
-                    if len(partes) >= 4:
+                    resposta = (
+                        "🏢 Atendimento corporativo identificado.\n\n"
+
+                        "Nossa equipe comercial dará continuidade.\n\n"
+
+                        f"{COMERCIAL}\n\n"
+
+                        f"{HORARIO}"
+                    )
+
+                    responder(numero, resposta)
+
+                    return "ok", 200
+
+                # =====================================================
+                # ORÇAMENTO PDF
+                # =====================================================
+
+                if texto_lower.startswith("orcamento;"):
+
+                    try:
+
+                        partes = texto.split(";")
 
                         cliente = partes[1].strip()
 
@@ -240,73 +276,136 @@ def receber_mensagem():
 
                         quantidade = int(partes[3].strip())
 
-                        gerar_orcamento(
-                            numero,
+                        resultado = df[
+                            df["DESCRIÇÃO"].str.contains(
+                                produto,
+                                case=False,
+                                na=False
+                            )
+                        ]
+
+                        if resultado.empty:
+
+                            responder(
+                                numero,
+                                "❌ Produto não encontrado."
+                            )
+
+                            return "ok", 200
+
+                        produto_escolhido = resultado.iloc[0]
+
+                        sku = str(produto_escolhido["SKU"])
+
+                        descricao = str(produto_escolhido["DESCRIÇÃO"])
+
+                        preco = float(produto_escolhido["PREÇO_VENDA"])
+
+                        total = preco * quantidade
+
+                        gerar_pdf(
                             cliente,
-                            produto,
-                            quantidade
+                            sku,
+                            descricao,
+                            quantidade,
+                            preco,
+                            total
                         )
 
-                    else:
+                        resposta = (
+                            "📄 Proposta comercial gerada com sucesso.\n\n"
 
-                        exemplo = (
-                            "📄 Para gerar orçamento automático use:\n\n"
-                            "orcamento; Nome Cliente; Produto; Quantidade\n\n"
-                            "Exemplo:\n"
-                            "orcamento; Empresa XPTO; SSD Kingston; 5"
+                            "✅ PDF criado\n"
+                            "✅ Valor calculado\n"
+                            "✅ Atendimento TEC9\n\n"
+
+                            "Sua equipe já pode enviar a proposta ao cliente 🚀"
                         )
 
-                        responder_mensagem(numero, exemplo)
+                        responder(numero, resposta)
 
-                # =====================================================
-                # CNPJ
-                # =====================================================
+                        return "ok", 200
 
-                elif detectar_cnpj(texto):
+                    except Exception as erro:
 
-                    resposta = (
-                        "🏢 Identificamos um possível atendimento corporativo.\n\n"
-                        "Nossa equipe comercial dará continuidade ao atendimento.\n\n"
-                        f"{WHATSAPP_ESPECIALISTA}\n\n"
-                        f"{HORARIO_ATENDIMENTO}"
-                    )
+                        print(erro)
 
-                    responder_mensagem(numero, resposta)
+                        responder(
+                            numero,
+                            (
+                                "❌ Modelo inválido.\n\n"
 
-                # =====================================================
-                # CLIENTE QUENTE
-                # =====================================================
+                                "Use:\n"
 
-                elif detectar_cliente_quente(texto):
+                                "orcamento; Nome Cliente; Produto; Quantidade"
+                            )
+                        )
 
-                    resposta = (
-                        "🔥 Identificamos interesse comercial.\n\n"
-                        "Para um atendimento mais rápido 👇\n\n"
-                        f"{WHATSAPP_ESPECIALISTA}"
-                    )
-
-                    responder_mensagem(numero, resposta)
-
-                # =====================================================
-                # EMPRESA
-                # =====================================================
-
-                elif detectar_empresa(texto):
-
-                    resposta = (
-                        "🏢 Atendimento corporativo identificado.\n\n"
-                        f"{WHATSAPP_ESPECIALISTA}"
-                    )
-
-                    responder_mensagem(numero, resposta)
+                        return "ok", 200
 
                 # =====================================================
                 # BUSCA PRODUTOS
                 # =====================================================
 
-                else:
+                resultado = df[
+                    df["DESCRIÇÃO"].str.contains(
+                        texto,
+                        case=False,
+                        na=False
+                    )
+                ]
 
-                    buscar_produtos(numero, texto_original)
+                if not resultado.empty:
+
+                    resultado = resultado.head(5)
+
+                    mensagem = (
+                        f"🔎 Encontrei opções para: {texto}\n\n"
+                    )
+
+                    for _, row in resultado.iterrows():
+
+                        sku = str(row["SKU"])
+
+                        descricao = str(row["DESCRIÇÃO"])
+
+                        preco = float(row["PREÇO_VENDA"])
+
+                        link = f"{SITE}/busca?q={sku}"
+
+                        mensagem += (
+                            f"📦 {descricao}\n"
+                            f"💰 R$ {preco:.2f}\n"
+                            f"🔗 {link}\n\n"
+                        )
+
+                    mensagem += (
+                        "🤝 Atendimento comercial:\n"
+                        f"{COMERCIAL}\n\n"
+                        f"{HORARIO}"
+                    )
+
+                    responder(numero, mensagem)
+
+                    return "ok", 200
+
+                # =====================================================
+                # NÃO ENCONTROU
+                # =====================================================
+
+                resposta = (
+                    "❌ Não encontramos produtos relacionados.\n\n"
+
+                    "Tente informar:\n"
+                    "• Nome do produto\n"
+                    "• Marca\n"
+                    "• SKU\n\n"
+
+                    f"Ou fale com nosso comercial:\n"
+                    f"{COMERCIAL}"
+                )
+
+                responder(numero, resposta)
 
     except Exception as erro:
 
@@ -316,121 +415,22 @@ def receber_mensagem():
     return "ok", 200
 
 # =========================================================
-# MENU
+# PDF
 # =========================================================
 
-def enviar_menu(numero):
+def gerar_pdf(
+    cliente,
+    sku,
+    descricao,
+    quantidade,
+    preco,
+    total
+):
 
-    mensagem = (
-        "Olá 👋 Seja bem-vindo(a) à *TEC9 Informática* 🚀\n\n"
-        "Escolha uma opção:\n\n"
-        "1️⃣ Pessoa Jurídica\n"
-        "2️⃣ Pessoa Física\n"
-        "3️⃣ Upgrade / SSD / peças\n\n"
-        "Ou digite diretamente o produto que procura 👇\n\n"
-        "📄 Para gerar orçamento automático:\n"
-        "orcamento; Nome Cliente; Produto; Quantidade\n\n"
-        f"{HORARIO_ATENDIMENTO}"
-    )
-
-    responder_mensagem(numero, mensagem)
-
-# =========================================================
-# BUSCAR PRODUTOS
-# =========================================================
-
-def buscar_produtos(numero, texto_cliente):
-
-    resultados = []
-
-    texto_busca = texto_cliente.lower()
-
-    for _, row in df.iterrows():
-
-        descricao = str(row["Descrição Produto"]).lower()
-
-        if texto_busca in descricao:
-
-            resultados.append({
-                "sku": row["SKU"],
-                "descricao": row["Descrição Produto"],
-                "preco": row["Preço Venda"]
-            })
-
-        if len(resultados) >= 5:
-            break
-
-    if resultados:
-
-        mensagem = (
-            f"🔎 Encontrei opções para: *{texto_cliente}*\n\n"
-        )
-
-        for item in resultados:
-
-            mensagem += (
-                f"📦 {item['descricao']}\n"
-                f"💰 R$ {item['preco']}\n\n"
-            )
-
-        busca = texto_cliente.replace(" ", "+")
-
-        mensagem += (
-            f"🔗 Veja mais opções:\n"
-            f"{SITE_BUSCA}{busca}\n\n"
-            f"{WHATSAPP_ESPECIALISTA}"
-        )
-
-    else:
-
-        busca = texto_cliente.replace(" ", "+")
-
-        mensagem = (
-            f"🔎 Não encontrei produtos exatos para: *{texto_cliente}*\n\n"
-            f"Confira aqui:\n"
-            f"{SITE_BUSCA}{busca}"
-        )
-
-    responder_mensagem(numero, mensagem)
-
-# =========================================================
-# GERAR ORÇAMENTO PDF
-# =========================================================
-
-def gerar_orcamento(numero, cliente, produto, quantidade):
-
-    resultado = None
-
-    produto_lower = produto.lower()
-
-    for _, row in df.iterrows():
-
-        descricao = str(row["Descrição Produto"]).lower()
-
-        if produto_lower in descricao:
-
-            resultado = row
-            break
-
-    if resultado is None:
-
-        responder_mensagem(
-            numero,
-            "❌ Produto não encontrado."
-        )
-
-        return
-
-    descricao = resultado["Descrição Produto"]
-
-    preco = float(resultado["Preço Venda"])
-
-    total = preco * quantidade
-
-    nome_pdf = f"orcamento_{numero}.pdf"
+    nome_arquivo = "orcamento.pdf"
 
     doc = SimpleDocTemplate(
-        nome_pdf,
+        nome_arquivo,
         pagesize=A4
     )
 
@@ -439,117 +439,93 @@ def gerar_orcamento(numero, cliente, produto, quantidade):
     elementos = []
 
     titulo = Paragraph(
-        "<b>TEC9 INFORMÁTICA LTDA</b>",
-        styles['Title']
+        f"<b>{EMPRESA}</b>",
+        styles["Title"]
     )
 
     elementos.append(titulo)
 
-    elementos.append(Spacer(1, 12))
+    elementos.append(Spacer(1, 20))
 
-    dados_cliente = Paragraph(
-        f"Cliente: {cliente}<br/>"
-        f"Produto: {descricao}<br/>"
-        f"Quantidade: {quantidade}",
-        styles['BodyText']
+    data = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    elementos.append(
+        Paragraph(
+            f"Cliente: {cliente}",
+            styles["Normal"]
+        )
     )
 
-    elementos.append(dados_cliente)
+    elementos.append(
+        Paragraph(
+            f"Data: {data}",
+            styles["Normal"]
+        )
+    )
 
-    elementos.append(Spacer(1, 12))
+    elementos.append(Spacer(1, 20))
 
     tabela = Table([
-        ["Produto", "Qtd", "Valor Unitário", "Total"],
+
         [
+            "SKU",
+            "DESCRIÇÃO",
+            "QTD",
+            "UNITÁRIO",
+            "TOTAL"
+        ],
+
+        [
+            sku,
             descricao,
             str(quantidade),
             f"R$ {preco:.2f}",
             f"R$ {total:.2f}"
         ]
+
     ])
 
     tabela.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.grey),
-        ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
+
+        ('BACKGROUND', (0,0), (-1,0), colors.black),
+
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+
         ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+
+        ('BOTTOMPADDING', (0,0), (-1,0), 10)
+
     ]))
 
     elementos.append(tabela)
 
-    elementos.append(Spacer(1, 20))
+    elementos.append(Spacer(1, 30))
 
-    elementos.append(HRFlowable(width="100%"))
-
-    condicoes = Paragraph(
-        "<b>Condições Comerciais</b><br/>"
-        "• Pagamento: À vista.<br/>"
-        "• Prazo de entrega: 07 dias.<br/>"
-        "• Produto sujeito à disponibilidade de estoque.<br/>"
-        "• Garantia conforme fabricante.",
-        styles['BodyText']
+    elementos.append(
+        Paragraph(
+            "Proposta válida por 3 dias.",
+            styles["Normal"]
+        )
     )
 
-    elementos.append(condicoes)
+    elementos.append(
+        Paragraph(
+            SITE,
+            styles["Normal"]
+        )
+    )
 
     doc.build(elementos)
 
-    responder_mensagem(
-        numero,
-        "📄 Sua proposta comercial foi gerada com sucesso 😊"
-    )
+    print("PDF GERADO COM SUCESSO")
 
 # =========================================================
-# DETECTAR CLIENTE QUENTE
+# ENVIAR MENSAGEM
 # =========================================================
 
-def detectar_cliente_quente(texto):
-
-    for palavra in PALAVRAS_QUENTES:
-
-        if palavra in texto:
-            return True
-
-    return False
-
-# =========================================================
-# DETECTAR EMPRESA
-# =========================================================
-
-def detectar_empresa(texto):
-
-    for palavra in PALAVRAS_EMPRESA:
-
-        if palavra in texto:
-            return True
-
-    return False
-
-# =========================================================
-# DETECTAR CNPJ
-# =========================================================
-
-def detectar_cnpj(texto):
-
-    numeros = ""
-
-    for caractere in texto:
-
-        if caractere.isdigit():
-
-            numeros += caractere
-
-    if len(numeros) >= 11:
-
-        return True
-
-    return False
-
-# =========================================================
-# ENVIAR WHATSAPP
-# =========================================================
-
-def responder_mensagem(numero, mensagem):
+def responder(numero, mensagem):
 
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
@@ -559,31 +535,27 @@ def responder_mensagem(numero, mensagem):
     }
 
     payload = {
+
         "messaging_product": "whatsapp",
+
         "to": numero,
+
         "type": "text",
+
         "text": {
             "body": mensagem
         }
     }
 
-    try:
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
 
-        resposta = requests.post(
-            url,
-            headers=headers,
-            json=payload
-        )
+    print(f"STATUS: {response.status_code}")
 
-        print(f"STATUS: {resposta.status_code}")
-
-        print(resposta.text)
-
-        time.sleep(1)
-
-    except Exception as erro:
-
-        print(erro)
+    print(response.text)
 
 # =========================================================
 # START
@@ -591,9 +563,7 @@ def responder_mensagem(numero, mensagem):
 
 if __name__ == "__main__":
 
-    porta = int(os.environ.get("PORT", 8080))
-
     app.run(
         host="0.0.0.0",
-        port=porta
+        port=8080
     )
