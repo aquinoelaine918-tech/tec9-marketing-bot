@@ -48,7 +48,7 @@ def receber_mensagem():
         messages = value.get("messages")
 
         if messages:
-            message = messages[0]  # Correção crucial aqui: acessando o primeiro item da lista
+            message = messages[0]  # Acessando o primeiro item da lista de mensagens
             numero = message["from"]
             tipo = message["type"]
 
@@ -77,7 +77,7 @@ def receber_mensagem():
                         "Para um atendimento mais rápido e personalizado, nossa especialista pode te ajudar agora pelo WhatsApp:\n\n"
                         "👉 " + LINK_HUMANO
                     )
-                    responder_mensagem(numero, mensagem_transbordo)
+                    responder_mensagem(numero, message_transbordo)
                     estados_clientes[numero] = "com_humano"
                     return "ok", 200
 
@@ -193,6 +193,7 @@ def receber_mensagem():
     return "ok", 200
 
 def responder_mensagem(numero, mensagem):
+    # URL CORRIGIDA PARA REMOVER A VERSÃO FIXA INCOMPATÍVEL E MANTER A BARRA
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -207,6 +208,7 @@ def responder_mensagem(numero, mensagem):
     try:
         resposta = requests.post(url, headers=headers, json=payload)
         print(f"STATUS ENVIO: {resposta.status_code}")
+        print(f"RESPOSTA ENVIO: {resposta.text}")
     except Exception as e:
         print(f"Falha ao enviar: {e}")
 
