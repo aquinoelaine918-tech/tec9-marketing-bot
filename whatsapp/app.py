@@ -74,7 +74,7 @@ def home():
     return "TEC9 BOT ONLINE 🚀", 200
 
 # =========================================================
-# VERIFICAÇÃO WEBHOOK META
+# VERIFICAÇÃO META
 # =========================================================
 
 @app.route("/webhook", methods=["GET"])
@@ -143,7 +143,7 @@ def receber_mensagem():
                     enviar_menu(numero)
 
                 # =====================================================
-                # MENU PJ
+                # PESSOA JURÍDICA
                 # =====================================================
 
                 elif texto == "1":
@@ -164,7 +164,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_pj)
 
                 # =====================================================
-                # MENU PF
+                # PESSOA FÍSICA
                 # =====================================================
 
                 elif texto == "2":
@@ -183,7 +183,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_pf)
 
                 # =====================================================
-                # MENU UPGRADE
+                # UPGRADE / PEÇAS
                 # =====================================================
 
                 elif texto == "3":
@@ -208,10 +208,10 @@ def receber_mensagem():
                 # DETECTAR CNPJ
                 # =====================================================
 
-                elif texto.isdigit() and len(texto) >= 11:
+                elif detectar_cnpj(texto):
 
                     resposta_cnpj = (
-                        "🏢 Identificamos um possível CNPJ.\n\n"
+                        "🏢 Identificamos um possível atendimento corporativo.\n\n"
                         "Nossa equipe comercial dará continuidade ao atendimento.\n\n"
                         "Para atendimento especializado 👇\n\n"
                         f"{WHATSAPP_ESPECIALISTA}\n\n"
@@ -237,7 +237,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_quente)
 
                 # =====================================================
-                # EMPRESA AUTOMÁTICO
+                # EMPRESA
                 # =====================================================
 
                 elif detectar_empresa(texto):
@@ -252,7 +252,7 @@ def receber_mensagem():
                     responder_mensagem(numero, resposta_empresa)
 
                 # =====================================================
-                # BUSCA AUTOMÁTICA PRODUTO
+                # BUSCA AUTOMÁTICA
                 # =====================================================
 
                 else:
@@ -290,8 +290,8 @@ def enviar_menu(numero):
     mensagem = (
         "Olá 👋 Seja bem-vindo(a) à *TEC9 Informática* 🚀\n\n"
         "Para agilizar seu atendimento, escolha uma opção:\n\n"
-        "1️⃣ Produtos para uso pessoal\n"
-        "2️⃣ Soluções para empresa\n"
+        "1️⃣ Pessoa Jurídica\n"
+        "2️⃣ Pessoa Física\n"
         "3️⃣ Upgrade / SSD / peças\n\n"
         "Ou digite diretamente o produto que procura 👇\n\n"
         f"{HORARIO_ATENDIMENTO}"
@@ -324,6 +324,26 @@ def detectar_empresa(texto):
         if palavra in texto:
 
             return True
+
+    return False
+
+# =========================================================
+# DETECTAR CNPJ
+# =========================================================
+
+def detectar_cnpj(texto):
+
+    numeros = ""
+
+    for caractere in texto:
+
+        if caractere.isdigit():
+
+            numeros += caractere
+
+    if len(numeros) >= 11:
+
+        return True
 
     return False
 
