@@ -56,11 +56,52 @@ def receber_mensagem():
 
             if tipo == "text":
 
-                texto = message["text"]["body"]
+                texto = message["text"]["body"].strip()
 
                 print(f"MENSAGEM DE {numero}: {texto}")
 
-                responder_mensagem(numero, f"Você disse: {texto}")
+                # ========================================================
+                # LÓGICA DE RESPOSTA COM OS FLUXOS SOLICITADOS
+                # ========================================================
+                if texto == "1":
+                    # Bloco 2: Atendimento Pessoa Jurídica
+                    resposta_pj = (
+                        "🏢 *Atendimento Pessoa Jurídica*\n\n"
+                        "Para agilizar seu orçamento e atendimento corporativo, envie as informações abaixo:\n\n"
+                        "📌 CNPJ\n"
+                        "📌 Nome do comprador/responsável\n"
+                        "📌 E-mail corporativo\n"
+                        "📌 Produto ou solução desejada\n"
+                        "📌 Quantidade\n"
+                        "📌 Cidade/UF para entrega\n\n"
+                        "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
+                    )
+                    responder_mensagem(numero, resposta_pj)
+
+                elif texto == "2":
+                    # Bloco 3: Atendimento Pessoa Física
+                    resposta_pf = (
+                        "👤 *Atendimento Pessoa Física*\n\n"
+                        "Para prosseguirmos com seu atendimento, envie:\n\n"
+                        "📌 Nome\n"
+                        "📌 Produto desejado\n"
+                        "📌 Quantidade\n"
+                        "📌 Cidade/UF para entrega\n"
+                        "📌 E-mail para envio da proposta (opcional)\n\n"
+                        "Após o envio, nossa equipe comercial dará continuidade ao atendimento 🚀"
+                    )
+                    responder_mensagem(numero, resposta_pf)
+
+                else:
+                    # Bloco 1: Menu de Boas-vindas para qualquer outro texto
+                    menu_inicial = (
+                        "Olá, seja bem-vindo à TEC9 Informática 🚀\n\n"
+                        "Para iniciarmos seu atendimento, selecione uma opção:\n\n"
+                        "1️⃣ Pessoa Jurídica\n"
+                        "2️⃣ Pessoa Física\n\n"
+                        "Digite o número correspondente 👇"
+                    )
+                    responder_mensagem(numero, menu_inicial)
 
     except Exception as erro:
 
@@ -72,7 +113,7 @@ def receber_mensagem():
 
 def responder_mensagem(numero, mensagem):
 
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
