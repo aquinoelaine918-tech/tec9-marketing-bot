@@ -100,7 +100,7 @@ def receber_mensagem():
                     else:
                         # Resposta caso digite algo diferente de 1 ou 2
                         opcao_invalida = "Desculpe, não entendi. Digite apenas *1* para Pessoa Jurídica ou *2* para Pessoa Física. 👇"
-                        responder_mensagem(numero, opacity_invalida)
+                        responder_mensagem(numero, opcao_invalida)
 
                 elif estado_atual == "dados_enviados":
                     # Deixa o fluxo livre para o cliente digitar os dados sem o bot responder
@@ -113,7 +113,7 @@ def receber_mensagem():
     return "ok", 200
 
 def responder_mensagem(numero, mensagem):
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
