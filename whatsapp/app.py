@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # Configurações integradas com o painel de variáveis do seu Railway
-VERIFY_TOKEN = "TEC9_TOKEN"
+VERIFY_TOKEN = "tec9token123"
 WHATSAPP_TOKEN = os.getenv("EAAK409sUM3YBRYFqSVuTAVdObC87ZA2keusWA7pZCqFeqPoZA63iXuz5kZCZB3dMAZCVq6eiikWKX8TrCYXZCu8Bzcn4gyMBP0Huo9ZApwARBtZCY1oPe7RpvZA8sYzrJ89ZCGPvmGvXpoAEpiNpxrp5DqVrkVVHYvGp5zaV7mRKx4lVHuqP7sPqZCQcl9l8Gg0YRTJZBEgm7wvTNI0t4503ZAbgWwaL6m7osUTmfWBXmdvh7wtCZBGhYYIPobZCThVKaO7JEYxPLZCUyJ3yRRrSpZAkdCTs1ZCsOwgawZDZD")
 PHONE_NUMBER_ID = os.getenv("1099079283287430")
 
