@@ -19,16 +19,16 @@ PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 # CARREGAR PLANILHA
 # =====================================================
 
-print("=" * 50)
+print("=" * 60)
 print("CARREGANDO PLANILHA TEC9")
-print("=" * 50)
+print("=" * 60)
 
 df = pd.read_excel("produtos.xlsx")
 
 # NORMALIZA COLUNAS
 df.columns = [str(col).strip().upper() for col in df.columns]
 
-# AJUSTA NOMES
+# AJUSTE NOMES
 if "DESCRIÇÃO" in df.columns:
     df.rename(columns={"DESCRIÇÃO": "DESCRICAO"}, inplace=True)
 
@@ -38,10 +38,7 @@ if "PREÇO_VENDA" in df.columns:
 if "PRECO_VENDA" in df.columns:
     df.rename(columns={"PRECO_VENDA": "PRECO"}, inplace=True)
 
-print(df.columns)
-print(df.head())
-
-# LIMPA DADOS
+# LIMPEZA
 df = df.dropna(subset=["DESCRICAO"])
 
 df["DESCRICAO"] = df["DESCRICAO"].astype(str)
@@ -50,6 +47,9 @@ df["PRECO"] = pd.to_numeric(
     df["PRECO"],
     errors="coerce"
 ).fillna(0)
+
+print(df.columns)
+print(df.head())
 
 print(f"TOTAL PRODUTOS: {len(df)}")
 
@@ -60,7 +60,7 @@ print(f"TOTAL PRODUTOS: {len(df)}")
 clientes = {}
 
 # =====================================================
-# MENU
+# MENU PRINCIPAL
 # =====================================================
 
 MENU = """
@@ -103,17 +103,28 @@ def enviar_mensagem(numero, texto):
     )
 
 # =====================================================
+# RESETAR CLIENTE
+# =====================================================
+
+def resetar_cliente(numero):
+
+    clientes[numero] = {
+        "numero": numero,
+        "etapa": "inicio"
+    }
+
+# =====================================================
 # BUSCAR PRODUTOS
 # =====================================================
 
-def buscar_produtos(busca):
+def buscar_produtos(texto):
 
-    busca = busca.lower()
+    texto = texto.lower()
 
     resultados = df[
         df["DESCRICAO"]
         .str.lower()
-        .str.contains(busca, na=False)
+        .str.contains(texto, na=False)
     ]
 
     return resultados.head(5)
@@ -124,19 +135,23 @@ def buscar_produtos(busca):
 
 def gerar_pdf(cliente):
 
-    nome_pdf = f"proposta_{cliente['numero']}.pdf"
+    nome_arquivo = f"proposta_{cliente['numero']}.pdf"
 
-    c = canvas.Canvas(nome_pdf, pagesize=A4)
+    c = canvas.Canvas(nome_arquivo, pagesize=A4)
 
     largura, altura = A4
 
     y = altura - 50
 
-    # TÍTULO
     c.setFont("Helvetica-Bold", 20)
-    c.drawString(50, y, "PROPOSTA COMERCIAL - TEC9")
 
-    y -= 40
+    c.drawString(
+        50,
+        y,
+        "PROPOSTA COMERCIAL TEC9"
+    )
+
+    y -= 50
 
     c.setFont("Helvetica", 12)
 
@@ -148,33 +163,57 @@ def gerar_pdf(cliente):
 
     y -= 30
 
-    c.drawString(50, y, f"Cliente: {cliente['nome']}")
+    c.drawString(
+        50,
+        y,
+        f"Cliente: {cliente['nome']}"
+    )
 
     y -= 25
 
     if cliente["tipo"] == "PJ":
 
-        c.drawString(50, y, f"CNPJ: {cliente['cnpj']}")
+        c.drawString(
+            50,
+            y,
+            f"CNPJ: {cliente['cnpj']}"
+        )
 
         y -= 25
 
-    c.drawString(50, y, f"Cidade/UF: {cliente['cidade']}")
+    c.drawString(
+        50,
+        y,
+        f"Cidade/UF: {cliente['cidade']}"
+    )
 
     y -= 40
 
     c.setFont("Helvetica-Bold", 14)
 
-    c.drawString(50, y, "PRODUTO")
+    c.drawString(
+        50,
+        y,
+        "PRODUTO"
+    )
 
     y -= 30
 
     c.setFont("Helvetica", 12)
 
-    c.drawString(50, y, cliente["produto_nome"])
+    c.drawString(
+        50,
+        y,
+        cliente["produto_nome"]
+    )
 
     y -= 25
 
-    c.drawString(50, y, f"Quantidade: {cliente['quantidade']}")
+    c.drawString(
+        50,
+        y,
+        f"Quantidade: {cliente['quantidade']}"
+    )
 
     y -= 25
 
@@ -197,7 +236,7 @@ def gerar_pdf(cliente):
     c.drawString(
         50,
         y,
-        "Condições comerciais sujeitas à disponibilidade."
+        "Condições sujeitas à disponibilidade de estoque."
     )
 
     y -= 25
@@ -205,7 +244,7 @@ def gerar_pdf(cliente):
     c.drawString(
         50,
         y,
-        "Atendimento TEC9 Informática"
+        "TEC9 Informática"
     )
 
     y -= 25
@@ -218,7 +257,7 @@ def gerar_pdf(cliente):
 
     c.save()
 
-    return nome_pdf
+    return nome_arquivo
 
 # =====================================================
 # ENVIAR PDF
@@ -279,17 +318,6 @@ def enviar_documento(numero, arquivo):
     )
 
 # =====================================================
-# RESETAR CLIENTE
-# =====================================================
-
-def resetar_cliente(numero):
-
-    clientes[numero] = {
-        "etapa": "inicio",
-        "numero": numero
-    }
-
-# =====================================================
 # WEBHOOK
 # =====================================================
 
@@ -319,7 +347,7 @@ def webhook():
 
     data = request.get_json()
 
-    print("=" * 50)
+    print("=" * 60)
     print("EVENTO RECEBIDO")
     print(data)
 
@@ -340,8 +368,6 @@ def webhook():
     except:
         return "ok"
 
-    texto_lower = texto.lower()
-
     # =================================================
     # NOVO CLIENTE
     # =================================================
@@ -357,7 +383,7 @@ def webhook():
     cliente = clientes[numero]
 
     # =================================================
-    # BOTÃO SAIR GLOBAL
+    # SAIR
     # =================================================
 
     if texto == "0":
@@ -368,6 +394,8 @@ def webhook():
 ✅ Atendimento encerrado.
 
 Obrigado pelo contato com a TEC9 Informática 🚀
+
+Quando desejar retornar basta enviar uma nova mensagem.
 """
         )
 
@@ -376,7 +404,7 @@ Obrigado pelo contato com a TEC9 Informática 🚀
         return "ok"
 
     # =================================================
-    # MENU INICIAL
+    # MENU PRINCIPAL
     # =================================================
 
     if cliente["etapa"] == "inicio":
@@ -390,7 +418,7 @@ Obrigado pelo contato com a TEC9 Informática 🚀
             enviar_mensagem(
                 numero,
                 """
-🏢 Pessoa Jurídica
+🏢 Atendimento Pessoa Jurídica
 
 Informe o CNPJ:
 
@@ -409,7 +437,7 @@ Informe o CNPJ:
             enviar_mensagem(
                 numero,
                 """
-👤 Pessoa Física
+👤 Atendimento Pessoa Física
 
 Informe seu nome:
 
@@ -424,9 +452,11 @@ Informe seu nome:
             enviar_mensagem(
                 numero,
                 """
-👨‍💼 Atendimento comercial:
+👨‍💼 Atendimento comercial TEC9:
 
 https://wa.me/5511977315223
+
+0️⃣ Encerrar atendimento
 """
             )
 
@@ -474,6 +504,9 @@ Informe o nome do responsável:
             """
 Informe sua cidade/UF:
 
+Exemplo:
+São Paulo/SP
+
 0️⃣ Encerrar atendimento
 """
         )
@@ -496,9 +529,10 @@ Informe sua cidade/UF:
 Digite o produto desejado:
 
 Exemplos:
-• Servidor Lenovo
-• Notebook Dell
+• Servidor Dell
+• Notebook Lenovo
 • Impressora HP
+• Headset Logitech
 
 0️⃣ Encerrar atendimento
 """
@@ -519,9 +553,9 @@ Exemplos:
             enviar_mensagem(
                 numero,
                 """
-⚠️ Produto não localizado.
+⚠️ Produto não encontrado.
 
-Nosso time comercial continuará o atendimento.
+Nosso time comercial dará continuidade no atendimento.
 
 👨‍💼 Consultor TEC9:
 https://wa.me/5511977315223
@@ -536,7 +570,7 @@ https://wa.me/5511977315223
 
         cliente["produtos"] = produtos.to_dict("records")
 
-        resposta = "🔎 Encontramos estas opções:\n\n"
+        resposta = "🔎 Produtos encontrados:\n\n"
 
         for i, produto in enumerate(cliente["produtos"], start=1):
 
@@ -633,7 +667,7 @@ Informe a quantidade desejada:
         )
 
         resumo = f"""
-📋 Pré-Orçamento TEC9
+📋 PRÉ-ORÇAMENTO TEC9
 
 👤 Cliente:
 {cliente['nome']}
@@ -647,13 +681,13 @@ Informe a quantidade desejada:
 📦 Quantidade:
 {cliente['quantidade']}
 
-💰 Valor unitário:
+💰 Valor Unitário:
 R$ {cliente['valor_unitario']:,.2f}
 
-💵 Valor total:
+💵 Valor Total:
 R$ {cliente['valor_total']:,.2f}
 
-Escolha:
+Escolha uma opção:
 
 1️⃣ Receber proposta PDF
 2️⃣ Falar com consultor
@@ -667,7 +701,7 @@ Escolha:
         return "ok"
 
     # =================================================
-    # CONFIRMAR PDF
+    # CONFIRMAÇÃO PDF
     # =================================================
 
     if cliente["etapa"] == "confirmar_pdf":
@@ -683,7 +717,9 @@ Escolha:
                 """
 ✅ Proposta comercial enviada com sucesso.
 
-TEC9 Informática 🚀
+Obrigado por escolher a TEC9 Informática 🚀
+
+0️⃣ Encerrar atendimento
 """
             )
 
@@ -696,9 +732,11 @@ TEC9 Informática 🚀
             enviar_mensagem(
                 numero,
                 """
-👨‍💼 Atendimento comercial:
+👨‍💼 Consultor comercial TEC9:
 
 https://wa.me/5511977315223
+
+0️⃣ Encerrar atendimento
 """
             )
 
@@ -711,9 +749,9 @@ https://wa.me/5511977315223
             enviar_mensagem(
                 numero,
                 """
-Digite:
+Escolha uma opção válida:
 
-1️⃣ Receber PDF
+1️⃣ Receber proposta PDF
 2️⃣ Falar com consultor
 0️⃣ Encerrar atendimento
 """
@@ -724,7 +762,7 @@ Digite:
     return "ok"
 
 # =====================================================
-# INICIAR
+# INICIAR APP
 # =====================================================
 
 if __name__ == "__main__":
