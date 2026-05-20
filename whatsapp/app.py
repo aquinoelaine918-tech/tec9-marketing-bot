@@ -24,29 +24,29 @@ print("=" * 60)
 print("CARREGANDO PLANILHA TEC9")
 print("=" * 60)
 
-df = pd.read_excel("produtos.xlsx")
+try:
+    df = pd.read_excel("produtos.xlsx")
+    # NORMALIZA COLUNAS
+    df.columns = [str(col).strip().upper() for col in df.columns]
 
-# NORMALIZA COLUNAS
-df.columns = [str(col).strip().upper() for col in df.columns]
+    # AJUSTE NOMES
+    if "DESCRIÇÃO" in df.columns:
+        df.rename(columns={"DESCRIÇÃO": "DESCRICAO"}, inplace=True)
+    if "PREÇO_VENDA" in df.columns:
+        df.rename(columns={"PREÇO_VENDA": "PRECO"}, inplace=True)
+    if "PRECO_VENDA" in df.columns:
+        df.rename(columns={"PRECO_VENDA": "PRECO"}, inplace=True)
 
-# AJUSTE NOMES
-if "DESCRIÇÃO" in df.columns:
-    df.rename(columns={"DESCRIÇÃO": "DESCRICAO"}, inplace=True)
+    # LIMPEZA
+    df = df.dropna(subset=["DESCRICAO"])
+    df["DESCRICAO"] = df["DESCRICAO"].astype(str)
+    df["PRECO"] = pd.to_numeric(df["PRECO"], errors="coerce").fillna(0)
 
-if "PREÇO_VENDA" in df.columns:
-    df.rename(columns={"PREÇO_VENDA": "PRECO"}, inplace=True)
-
-if "PRECO_VENDA" in df.columns:
-    df.rename(columns={"PRECO_VENDA": "PRECO"}, inplace=True)
-
-# LIMPEZA
-df = df.dropna(subset=["DESCRICAO"])
-df["DESCRICAO"] = df["DESCRICAO"].astype(str)
-df["PRECO"] = pd.to_numeric(df["PRECO"], errors="coerce").fillna(0)
-
-print(df.columns)
-print(df.head())
-print(f"TOTAL PRODUTOS: {len(df)}")
+    print(df.columns)
+    print(df.head())
+    print(f"TOTAL PRODUTOS: {len(df)}")
+except Exception as e:
+    print(f"Aviso: Não foi possível carregar produtos.xlsx: {e}")
 
 # =====================================================
 # MEMÓRIA DOS CLIENTES
@@ -55,26 +55,24 @@ print(f"TOTAL PRODUTOS: {len(df)}")
 clientes = {}
 
 # =====================================================
-# MENU PRINCIPAL (ITEM 3 ATUALIZADO PARA CONSULTOR)
+# MENU PRINCIPAL (ITEM 3 AJUSTADO PARA CONSULTOR)
 # =====================================================
 
-MENU = """
-Olá 👋 Seja bem-vindo(a) à TEC9 Informática 🚀
+MENU = """Olá 👋 Seja bem-vindo(a) à TEC9 Informática 🚀
 
 Escolha uma opção:
 
 1️⃣ Pessoa Jurídica
 2️⃣ Pessoa Física
 3️⃣ Falar com consultor
-0️⃣ Encerrar atendimento
-"""
+0️⃣ Encerrar atendimento"""
 
 # =====================================================
 # ENVIAR MENSAGEM
 # =====================================================
 
 def enviar_mensagem(numero, texto):
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
@@ -105,89 +103,11 @@ def resetar_cliente(numero):
 
 def buscar_produtos(texto):
     texto = texto.lower()
-    resultados = df[df["DESCRICAO"].str.lower().str.contains(texto, na=False)]
-    return resultados.head(5)
-
-# =====================================================
-# GERAR PDF
-# =====================================================
-
-def gerar_pdf(cliente):
-    nome_arquivo = f"proposta_{cliente['numero']}.pdf"
-    c = canvas.Canvas(nome_arquivo, pagesize=A4)
-    largura, altura = A4
-    y = altura - 50
-
-    c.setFont("Helvetica-Bold", 20)
-    c.drawString(50, y, "PROPOSTA COMERCIAL TEC9")
-    y -= 50
-
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    y -= 30
-    c.drawString(50, y, f"Cliente: {cliente['nome']}")
-    y -= 25
-
-    if cliente.get("tipo") == "PJ":
-        c.drawString(50, y, f"CNPJ: {cliente['cnpj']}")
-        y -= 25
-
-    c.drawString(50, y, f"Cidade/UF: {cliente['cidade']}")
-    y -= 40
-
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "PRODUTO")
-    y -= 30
-
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, cliente["produto_nome"])
-    y -= 25
-    c.drawString(50, y, f"Quantidade: {cliente['quantidade']}")
-    y -= 25
-    c.drawString(50, y, f"Valor Unitário: R$ {cliente['valor_unitario']:,.2f}")
-    y -= 25
-    c.drawString(50, y, f"Valor Total: R$ {cliente['valor_total']:,.2f}")
-    y -= 50
-
-    c.drawString(50, y, "Condições sujeitas à disponibilidade de estoque.")
-    y -= 25
-    c.drawString(50, y, "TEC9 Informática")
-    y -= 25
-    c.drawString(50, y, "WhatsApp: (11) 97731-5223")
-    c.save()
-    return nome_arquivo
-
-# =====================================================
-# ENVIAR PDF
-# =====================================================
-
-def enviar_documento(numero, arquivo):
-    url_upload = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
-    headers = {"Authorization": f"Bearer {TOKEN}"}
-    files = {"file": open(arquivo, "rb")}
-    data = {"messaging_product": "whatsapp"}
-
-    resposta = requests.post(url_upload, headers=headers, files=files, data=data)
-    
     try:
-        media_id = resposta.json()["id"]
-        url_msg = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": numero,
-            "type": "document",
-            "document": {
-                "id": media_id,
-                "filename": arquivo
-            }
-        }
-        headers_msg = {
-            "Authorization": f"Bearer {TOKEN}",
-            "Content-Type": "application/json"
-        }
-        requests.post(url_msg, headers=headers_msg, json=payload)
-    except Exception as e:
-        print(f"Erro ao processar envio do PDF: {e}")
+        resultados = df[df["DESCRICAO"].str.lower().str.contains(texto, na=False)]
+        return resultados.head(5)
+    except:
+        return []
 
 # =====================================================
 # WEBHOOK
@@ -195,9 +115,7 @@ def enviar_documento(numero, arquivo):
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    # =================================================
     # VERIFICAÇÃO META
-    # =================================================
     if request.method == "GET":
         verify_token = "tec9"
         token = request.args.get("hub.verify_token")
@@ -206,30 +124,32 @@ def webhook():
             return challenge
         return "Erro"
 
-    # =================================================
     # RECEBER EVENTO
-    # =================================================
     data = request.get_json()
-
     print("=" * 60)
     print("EVENTO RECEBIDO")
     print(data)
 
     try:
-        mensagem = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        # Estrutura com índices [0] para evitar erros de leitura da lista da Meta
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        mensagem = value["messages"][0]
+
         numero = mensagem["from"]
         texto = mensagem["text"]["body"].strip()
-    except:
+    except Exception as e:
+        print(f"Ignorando notificação ou evento sem mensagem: {e}")
         return "ok"
 
-    # =================================================
-    # NOVO CLIENTE / RESET DE MENU
-    # =================================================
+    # COMANDOS GLOBAIS DE RETORNO
     if texto.lower() in ["menu", "reiniciar", "voltar"]:
         resetar_cliente(numero)
         enviar_mensagem(numero, MENU)
         return "ok"
 
+    # NOVO CLIENTE
     if numero not in clientes:
         resetar_cliente(numero)
         enviar_mensagem(numero, MENU)
@@ -237,25 +157,22 @@ def webhook():
 
     cliente = clientes[numero]
 
-    # Se o cliente estiver com o humano, o bot para de interagir de forma estática
-    if cliente["etapa"] == "com_humano":
-        print(f"Mensagem de {numero} ignorada (em atendimento humano).")
+    # SE ESTIVER COM O HUMANO, O BOT FICA EM SILÊNCIO
+    if cliente.get("etapa") == "com_humano":
+        print(f"Mensagem de {numero} ignorada (atendimento com humano ativo).")
         return "ok"
 
-    # =================================================
-    # ENCERRAR
-    # =================================================
+    # ENCARRAR ATENDIMENTO
     if texto == "0":
         enviar_mensagem(
             numero,
             "✅ Atendimento encerrado.\n\nObrigado pelo contato com a TEC9 Informática 🚀\n\nQuando desejar retornar basta enviar uma nova mensagem."
         )
-        del clientes[numero]
+        if numero in clientes:
+            del clientes[numero]
         return "ok"
 
-    # =================================================
-    # MENU PRINCIPAL - LÓGICA DE ETAPAS
-    # =================================================
+    # LÓGICA DO MENU PRINCIPAL
     if cliente["etapa"] == "inicio":
         if texto == "1":
             cliente["tipo"] = "PJ"
