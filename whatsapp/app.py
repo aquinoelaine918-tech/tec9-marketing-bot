@@ -1,216 +1,260 @@
 from flask import Flask, request
 import requests
 import pandas as pd
-import os
+from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Table,
-    TableStyle,
-    Paragraph,
-    Spacer
-)
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
-# =========================================================
+# ==========================================
 # CONFIGURAÇÕES
-# =========================================================
+# ==========================================
 
 TOKEN = os.getenv("TOKEN_WHATSAPP")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-URL_WHATSAPP = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
-
-HEADERS = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": "application/json"
-}
-
-# =========================================================
+# ==========================================
 # CARREGAR PLANILHA
-# =========================================================
+# ==========================================
 
-print("=" * 50)
+print("=" * 40)
 print("CARREGANDO PLANILHA TEC9")
-print("=" * 50)
+print("=" * 40)
 
 df = pd.read_excel("produtos.xlsx")
 
 print("COLUNAS ENCONTRADAS:")
 print(df.columns)
 
-# NORMALIZAÇÃO
-df.columns = df.columns.str.strip()
+# NORMALIZA COLUNAS
+df.columns = [str(col).strip().upper() for col in df.columns]
 
-# RENOMEAR AUTOMATICAMENTE
-colunas = {}
+# RENOMEIA
+if "DESCRIÇÃO" in df.columns:
+    df.rename(columns={"DESCRIÇÃO": "DESCRICAO"}, inplace=True)
 
-for col in df.columns:
-    nome = col.lower()
+if "PREÇO_VENDA" in df.columns:
+    df.rename(columns={"PREÇO_VENDA": "PRECO"}, inplace=True)
 
-    if "sku" in nome:
-        colunas[col] = "SKU"
-
-    elif "descr" in nome:
-        colunas[col] = "DESCRICAO"
-
-    elif "pre" in nome:
-        colunas[col] = "PRECO"
-
-df.rename(columns=colunas, inplace=True)
-
-# LIMPEZA
-df["DESCRICAO"] = df["DESCRICAO"].astype(str)
-df["PRECO"] = pd.to_numeric(df["PRECO"], errors="coerce")
-df = df.dropna(subset=["DESCRICAO", "PRECO"])
+if "PRECO_VENDA" in df.columns:
+    df.rename(columns={"PRECO_VENDA": "PRECO"}, inplace=True)
 
 print(df.head())
 
 print(f"TOTAL PRODUTOS: {len(df)}")
 
-# =========================================================
+# ==========================================
 # MEMÓRIA DOS CLIENTES
-# =========================================================
+# ==========================================
 
 clientes = {}
 
-# =========================================================
+# ==========================================
 # ENVIAR MENSAGEM
-# =========================================================
+# ==========================================
 
-def enviar_mensagem(numero, mensagem):
+def enviar_mensagem(numero, texto):
+
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json"
+    }
 
     payload = {
         "messaging_product": "whatsapp",
         "to": numero,
         "type": "text",
         "text": {
-            "body": mensagem
+            "body": texto
         }
     }
 
-    requests.post(
-        URL_WHATSAPP,
-        headers=HEADERS,
-        json=payload
-    )
+    requests.post(url, headers=headers, json=payload)
 
-# =========================================================
-# GERAR PDF
-# =========================================================
+# ==========================================
+# BUSCAR PRODUTOS
+# ==========================================
 
-def gerar_pdf(cliente, produto, qtd, valor_unitario, total):
+def buscar_produtos(texto):
 
-    nome_arquivo = f"orcamento_{cliente}.pdf"
+    texto = texto.lower()
 
-    doc = SimpleDocTemplate(
-        nome_arquivo,
-        pagesize=A4
-    )
-
-    elementos = []
-
-    estilos = getSampleStyleSheet()
-
-    titulo = Paragraph(
-        "<b>PROPOSTA COMERCIAL TEC9 INFORMÁTICA</b>",
-        estilos["Title"]
-    )
-
-    elementos.append(titulo)
-    elementos.append(Spacer(1, 20))
-
-    data = [
-        ["Cliente", cliente],
-        ["Produto", produto],
-        ["Quantidade", str(qtd)],
-        ["Valor Unitário", f"R$ {valor_unitario:,.2f}"],
-        ["Valor Total", f"R$ {total:,.2f}"],
-        ["Data", datetime.now().strftime("%d/%m/%Y %H:%M")]
+    resultados = df[
+        df["DESCRICAO"]
+        .astype(str)
+        .str.lower()
+        .str.contains(texto, na=False)
     ]
 
-    tabela = Table(data, colWidths=[180, 300])
+    return resultados.head(5)
 
-    tabela.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("GRID", (0, 0), (-1, -1), 1, colors.black),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-    ]))
+# ==========================================
+# GERAR PDF
+# ==========================================
 
-    elementos.append(tabela)
-    elementos.append(Spacer(1, 20))
+def gerar_pdf(cliente):
 
-    rodape = Paragraph(
-        """
-        <b>TEC9 INFORMÁTICA</b><br/>
-        Atendimento comercial especializado<br/>
-        Proposta válida por 3 dias.
-        """,
-        estilos["Normal"]
-    )
+    nome_arquivo = f"proposta_{cliente['numero']}.pdf"
 
-    elementos.append(rodape)
+    c = canvas.Canvas(nome_arquivo, pagesize=A4)
 
-    doc.build(elementos)
+    largura, altura = A4
+
+    y = altura - 50
+
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(50, y, "PROPOSTA COMERCIAL - TEC9")
+
+    y -= 40
+
+    c.setFont("Helvetica", 12)
+
+    c.drawString(50, y, f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+    y -= 30
+
+    c.drawString(50, y, f"Cliente: {cliente['nome']}")
+
+    y -= 25
+
+    if cliente["tipo"] == "PJ":
+        c.drawString(50, y, f"CNPJ: {cliente['cnpj']}")
+        y -= 25
+
+    c.drawString(50, y, f"Cidade/UF: {cliente['cidade']}")
+
+    y -= 40
+
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, y, "PRODUTO")
+
+    y -= 30
+
+    c.setFont("Helvetica", 12)
+
+    c.drawString(50, y, cliente["produto_nome"])
+
+    y -= 25
+
+    c.drawString(50, y, f"Quantidade: {cliente['quantidade']}")
+
+    y -= 25
+
+    c.drawString(50, y, f"Valor Unitário: R$ {cliente['valor_unitario']:,.2f}")
+
+    y -= 25
+
+    c.drawString(50, y, f"Valor Total: R$ {cliente['valor_total']:,.2f}")
+
+    y -= 50
+
+    c.drawString(50, y, "Condições comerciais sujeitas à disponibilidade.")
+
+    y -= 25
+
+    c.drawString(50, y, "Atendimento TEC9 Informática")
+
+    y -= 25
+
+    c.drawString(50, y, "WhatsApp: (11) 97731-5223")
+
+    c.save()
 
     return nome_arquivo
 
-# =========================================================
-# BUSCAR PRODUTO
-# =========================================================
+# ==========================================
+# ENVIAR DOCUMENTO
+# ==========================================
 
-def buscar_produto(termo):
+def enviar_documento(numero, caminho_arquivo):
 
-    termo = termo.lower()
+    url_upload = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
 
-    resultado = df[
-        df["DESCRICAO"].str.lower().str.contains(termo, na=False)
-    ]
+    headers = {
+        "Authorization": f"Bearer {TOKEN}"
+    }
 
-    return resultado.head(5)
+    files = {
+        "file": open(caminho_arquivo, "rb")
+    }
 
-# =========================================================
+    data = {
+        "messaging_product": "whatsapp"
+    }
+
+    resposta = requests.post(
+        url_upload,
+        headers=headers,
+        files=files,
+        data=data
+    )
+
+    media_id = resposta.json()["id"]
+
+    url_msg = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "document",
+        "document": {
+            "id": media_id,
+            "filename": caminho_arquivo
+        }
+    }
+
+    headers_msg = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    requests.post(url_msg, headers=headers_msg, json=payload)
+
+# ==========================================
+# MENU INICIAL
+# ==========================================
+
+def menu_inicial():
+
+    return """
+Olá 👋 Seja bem-vindo(a) à TEC9 Informática 🚀
+
+Escolha uma opção:
+
+1️⃣ Pessoa Jurídica
+2️⃣ Pessoa Física
+3️⃣ Falar com consultor
+0️⃣ Encerrar atendimento
+"""
+
+# ==========================================
 # WEBHOOK
-# =========================================================
+# ==========================================
 
-@app.route("/", methods=["GET"])
-def home():
-    return "BOT TEC9 ONLINE"
+@app.route("/webhook", methods=["GET", "POST"])
+def webhook():
 
-# =========================================================
-# WEBHOOK META
-# =========================================================
+    if request.method == "GET":
 
-@app.route("/webhook", methods=["GET"])
-def verificar():
+        verify_token = "tec9"
 
-    verify_token = "tec9"
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
+        if token == verify_token:
+            return challenge
 
-    if mode and token:
-
-        if mode == "subscribe" and token == verify_token:
-            return challenge, 200
-
-    return "Erro", 403
-
-# =========================================================
-# RECEBER MENSAGENS
-# =========================================================
-
-@app.route("/webhook", methods=["POST"])
-def receber():
+        return "Erro"
 
     data = request.get_json()
+
+    print("=" * 50)
+    print("EVENTO RECEBIDO")
+    print(data)
 
     try:
 
@@ -222,353 +266,318 @@ def receber():
 
         texto_lower = texto.lower()
 
-        print("=" * 50)
-        print("MENSAGEM RECEBIDA:")
-        print(texto)
-        print("=" * 50)
+    except:
+        return "ok"
 
-        # =====================================================
-        # NOVO CLIENTE
-        # =====================================================
+    # ======================================
+    # NOVO CLIENTE
+    # ======================================
 
-        if numero not in clientes:
+    if numero not in clientes:
 
-            clientes[numero] = {
-                "etapa": "tipo_cliente"
-            }
+        clientes[numero] = {
+            "etapa": "inicio",
+            "numero": numero
+        }
 
-            menu = """
-👋 Seja bem-vindo(a) à TEC9 Informática 🚀
+        enviar_mensagem(numero, menu_inicial())
 
-Escolha uma opção:
+        return "ok"
 
-1️⃣ Pessoa Jurídica
-2️⃣ Pessoa Física
+    cliente = clientes[numero]
 
-Digite apenas o número desejado.
+    # ======================================
+    # ENCERRAR
+    # ======================================
+
+    if texto == "0":
+
+        enviar_mensagem(
+            numero,
+            """
+✅ Atendimento encerrado.
+
+A TEC9 Informática agradece seu contato 🚀
 """
+        )
 
-            enviar_mensagem(numero, menu)
+        del clientes[numero]
 
-            return "ok", 200
+        return "ok"
 
-        etapa = clientes[numero]["etapa"]
+    # ======================================
+    # MENU
+    # ======================================
 
-        # =====================================================
-        # ESCOLHA PF / PJ
-        # =====================================================
+    if cliente["etapa"] == "inicio":
 
-        if etapa == "tipo_cliente":
+        if texto == "1":
 
-            if texto == "1":
+            cliente["tipo"] = "PJ"
+            cliente["etapa"] = "aguardando_cnpj"
 
-                clientes[numero]["tipo"] = "PJ"
-                clientes[numero]["etapa"] = "cnpj"
+            enviar_mensagem(numero, "Informe o CNPJ:")
 
-                enviar_mensagem(
-                    numero,
-                    "📌 Informe o CNPJ da empresa:"
-                )
+            return "ok"
 
-            elif texto == "2":
+        elif texto == "2":
 
-                clientes[numero]["tipo"] = "PF"
-                clientes[numero]["etapa"] = "nome"
+            cliente["tipo"] = "PF"
+            cliente["etapa"] = "aguardando_nome"
 
-                enviar_mensagem(
-                    numero,
-                    "👤 Informe seu nome:"
-                )
+            enviar_mensagem(numero, "Informe seu nome:")
 
-            else:
+            return "ok"
 
-                enviar_mensagem(
-                    numero,
-                    "Digite apenas:\n1️⃣ Pessoa Jurídica\n2️⃣ Pessoa Física"
-                )
-
-            return "ok", 200
-
-        # =====================================================
-        # PJ
-        # =====================================================
-
-        if etapa == "cnpj":
-
-            clientes[numero]["cnpj"] = texto
-            clientes[numero]["etapa"] = "responsavel"
-
-            enviar_mensagem(
-                numero,
-                "👤 Informe o nome do responsável:"
-            )
-
-            return "ok", 200
-
-        if etapa == "responsavel":
-
-            clientes[numero]["responsavel"] = texto
-            clientes[numero]["etapa"] = "cidade"
-
-            enviar_mensagem(
-                numero,
-                "📍 Informe Cidade/UF:"
-            )
-
-            return "ok", 200
-
-        # =====================================================
-        # PF
-        # =====================================================
-
-        if etapa == "nome":
-
-            clientes[numero]["nome"] = texto
-            clientes[numero]["etapa"] = "cidade"
-
-            enviar_mensagem(
-                numero,
-                "📍 Informe Cidade/UF:"
-            )
-
-            return "ok", 200
-
-        # =====================================================
-        # CIDADE
-        # =====================================================
-
-        if etapa == "cidade":
-
-            clientes[numero]["cidade"] = texto
-            clientes[numero]["etapa"] = "produto"
+        elif texto == "3":
 
             enviar_mensagem(
                 numero,
                 """
-🖥 Digite o produto desejado:
-
-Exemplo:
-- Notebook Dell
-- Servidor Lenovo
-- Impressora HP
-- Zebra
+👨‍💼 Consultor TEC9:
+https://wa.me/5511977315223
 """
             )
 
-            return "ok", 200
+            return "ok"
 
-        # =====================================================
-        # PRODUTO
-        # =====================================================
+        else:
 
-        if etapa == "produto":
+            enviar_mensagem(numero, menu_inicial())
 
-            clientes[numero]["produto"] = texto
+            return "ok"
 
-            resultados = buscar_produto(texto)
+    # ======================================
+    # CNPJ
+    # ======================================
 
-            if resultados.empty:
+    if cliente["etapa"] == "aguardando_cnpj":
 
-                enviar_mensagem(
-                    numero,
-                    """
-⚠️ Produto não localizado em nossa base automática.
+        cliente["cnpj"] = texto
+        cliente["etapa"] = "aguardando_nome"
 
-Seu atendimento será encaminhado para nossa equipe comercial 😊
+        enviar_mensagem(numero, "Informe o nome do responsável:")
+
+        return "ok"
+
+    # ======================================
+    # NOME
+    # ======================================
+
+    if cliente["etapa"] == "aguardando_nome":
+
+        cliente["nome"] = texto
+        cliente["etapa"] = "aguardando_cidade"
+
+        enviar_mensagem(numero, "Informe sua cidade/UF:")
+
+        return "ok"
+
+    # ======================================
+    # CIDADE
+    # ======================================
+
+    if cliente["etapa"] == "aguardando_cidade":
+
+        cliente["cidade"] = texto
+        cliente["etapa"] = "aguardando_produto"
+
+        enviar_mensagem(
+            numero,
+            """
+Digite o produto desejado:
+
+Exemplo:
+Servidor Lenovo
+Notebook Dell
+Impressora HP
 """
-                )
+        )
 
-                clientes.pop(numero)
+        return "ok"
 
-                return "ok", 200
+    # ======================================
+    # BUSCAR PRODUTO
+    # ======================================
 
-            resposta = "🔎 Encontramos estas opções:\n\n"
+    if cliente["etapa"] == "aguardando_produto":
 
-            for i, (_, item) in enumerate(resultados.iterrows(), start=1):
+        produtos = buscar_produtos(texto)
 
-                resposta += (
-                    f"{i}️⃣ {item['DESCRICAO']}\n"
-                    f"💰 R$ {item['PRECO']:,.2f}\n\n"
-                )
+        if produtos.empty:
 
-            resposta += "Digite o número do produto desejado."
+            enviar_mensagem(
+                numero,
+                """
+⚠️ Não localizamos o produto informado.
 
-            clientes[numero]["resultados"] = resultados.to_dict("records")
-            clientes[numero]["etapa"] = "selecionar_produto"
+Nossa equipe comercial continuará o atendimento.
 
-            enviar_mensagem(numero, resposta)
+👨‍💼 Consultor TEC9:
+https://wa.me/5511977315223
+"""
+            )
 
-            return "ok", 200
+            cliente["etapa"] = "inicio"
 
-        # =====================================================
-        # SELECIONAR PRODUTO
-        # =====================================================
+            return "ok"
 
-        if etapa == "selecionar_produto":
+        cliente["produtos_encontrados"] = produtos.to_dict("records")
 
-            try:
+        resposta = "🔎 Encontramos estas opções:\n\n"
 
-                indice = int(texto) - 1
+        for i, produto in enumerate(cliente["produtos_encontrados"], start=1):
 
-                produto = clientes[numero]["resultados"][indice]
+            descricao = str(produto["DESCRICAO"])
 
-                clientes[numero]["produto_escolhido"] = produto
+            preco = float(produto["PRECO"])
 
-                clientes[numero]["etapa"] = "quantidade"
+            resposta += (
+                f"{i}️⃣ {descricao}\n"
+                f"💰 R$ {preco:,.2f}\n\n"
+            )
 
-                enviar_mensagem(
-                    numero,
-                    "📦 Informe a quantidade desejada:"
-                )
+        resposta += "Digite o número desejado."
 
-            except:
+        cliente["etapa"] = "aguardando_escolha"
 
-                enviar_mensagem(
-                    numero,
-                    "Digite apenas o número do produto."
-                )
+        enviar_mensagem(numero, resposta)
 
-            return "ok", 200
+        return "ok"
 
-        # =====================================================
-        # QUANTIDADE
-        # =====================================================
+    # ======================================
+    # ESCOLHA PRODUTO
+    # ======================================
 
-        if etapa == "quantidade":
+    if cliente["etapa"] == "aguardando_escolha":
 
-            try:
+        try:
 
-                quantidade = int(texto)
+            indice = int(texto) - 1
 
-            except:
+            produto = cliente["produtos_encontrados"][indice]
 
-                enviar_mensagem(
-                    numero,
-                    "Digite apenas números."
-                )
+        except:
 
-                return "ok", 200
+            enviar_mensagem(numero, "Digite um número válido.")
 
-            produto = clientes[numero]["produto_escolhido"]
+            return "ok"
 
-            valor_unitario = float(produto["PRECO"])
+        cliente["produto_nome"] = produto["DESCRICAO"]
+        cliente["valor_unitario"] = float(produto["PRECO"])
 
-            total = valor_unitario * quantidade
+        cliente["etapa"] = "aguardando_quantidade"
 
-            clientes[numero]["quantidade"] = quantidade
-            clientes[numero]["total"] = total
+        enviar_mensagem(numero, "Informe a quantidade desejada:")
 
-            resumo = f"""
-📋 PRÉ-ORÇAMENTO TEC9
+        return "ok"
+
+    # ======================================
+    # QUANTIDADE
+    # ======================================
+
+    if cliente["etapa"] == "aguardando_quantidade":
+
+        try:
+
+            quantidade = int(texto)
+
+        except:
+
+            enviar_mensagem(numero, "Digite apenas números.")
+
+            return "ok"
+
+        cliente["quantidade"] = quantidade
+
+        cliente["valor_total"] = (
+            cliente["valor_unitario"] * quantidade
+        )
+
+        resposta = f"""
+📋 Pré-Orçamento TEC9
+
+👤 Cliente: {cliente['nome']}
+📍 Cidade: {cliente['cidade']}
 
 🖥 Produto:
-{produto['DESCRICAO']}
+{cliente['produto_nome']}
 
-📦 Quantidade:
-{quantidade}
+📦 Quantidade: {cliente['quantidade']}
 
 💰 Valor unitário:
-R$ {valor_unitario:,.2f}
+R$ {cliente['valor_unitario']:,.2f}
 
 💵 Valor total:
-R$ {total:,.2f}
+R$ {cliente['valor_total']:,.2f}
 
-Digite:
+Escolha:
 
 1️⃣ Receber proposta PDF
 2️⃣ Falar com consultor
+0️⃣ Encerrar atendimento
 """
 
-            clientes[numero]["etapa"] = "confirmacao"
+        cliente["etapa"] = "confirmar_pdf"
 
-            enviar_mensagem(numero, resumo)
+        enviar_mensagem(numero, resposta)
 
-            return "ok", 200
+        return "ok"
 
-        # =====================================================
-        # CONFIRMAÇÃO
-        # =====================================================
+    # ======================================
+    # CONFIRMAR PDF
+    # ======================================
 
-        if etapa == "confirmacao":
+    if cliente["etapa"] == "confirmar_pdf":
 
-            if texto == "1":
+        if texto == "1":
 
-                produto = clientes[numero]["produto_escolhido"]
+            pdf = gerar_pdf(cliente)
 
-                quantidade = clientes[numero]["quantidade"]
+            enviar_documento(numero, pdf)
 
-                total = clientes[numero]["total"]
+            enviar_mensagem(
+                numero,
+                """
+✅ Proposta comercial enviada com sucesso.
 
-                valor_unitario = produto["PRECO"]
-
-                nome_cliente = (
-                    clientes[numero].get("responsavel")
-                    or clientes[numero].get("nome")
-                )
-
-                gerar_pdf(
-                    nome_cliente,
-                    produto["DESCRICAO"],
-                    quantidade,
-                    valor_unitario,
-                    total
-                )
-
-                enviar_mensagem(
-                    numero,
-                    """
-✅ Proposta comercial gerada com sucesso.
-
-📄 PDF criado
-💰 Valores calculados
-🚀 Atendimento TEC9
+TEC9 Informática 🚀
 """
-                )
+            )
 
-                clientes.pop(numero)
+            cliente["etapa"] = "inicio"
 
-                return "ok", 200
+            return "ok"
 
-            elif texto == "2":
+        elif texto == "2":
 
-                enviar_mensagem(
-                    numero,
-                    """
-👨‍💼 Seu atendimento foi direcionado para nossa equipe comercial.
-
-Em breve um consultor TEC9 continuará o atendimento 😊
+            enviar_mensagem(
+                numero,
+                """
+👨‍💼 Consultor TEC9:
+https://wa.me/5511977315223
 """
-                )
+            )
 
-                clientes.pop(numero)
+            cliente["etapa"] = "inicio"
 
-                return "ok", 200
+            return "ok"
 
-            else:
+        else:
 
-                enviar_mensagem(
-                    numero,
-                    "Digite:\n1️⃣ PDF\n2️⃣ Consultor"
-                )
+            enviar_mensagem(
+                numero,
+                "Digite 1 para PDF ou 2 para consultor."
+            )
 
-                return "ok", 200
+            return "ok"
 
-    except Exception as erro:
+    return "ok"
 
-        print("ERRO:")
-        print(erro)
-
-    return "ok", 200
-
-# =========================================================
-# EXECUTAR
-# =========================================================
+# ==========================================
+# START
+# ==========================================
 
 if __name__ == "__main__":
 
-    porta = int(os.environ.get("PORT", 5000))
-
-    app.run(
-        host="0.0.0.0",
-        port=porta
-    )
+    app.run(host="0.0.0.0", port=8080)
